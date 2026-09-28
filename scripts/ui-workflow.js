@@ -1,0 +1,118 @@
+/** 在隔离资料库操作真实 Electron 页面。运行前不需要关闭正式实例。 */
+'use strict';
+const fs=require('fs'),path=require('path'),os=require('os'),assert=require('assert/strict');
+let pw;try{pw=require('playwright');}catch{pw=require(process.env.LV_PLAYWRIGHT_PATH||path.join(os.homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));}
+async function until(fn,match,label){const start=Date.now();let last;while(Date.now()-start<12000){try{last=await fn();if(match(last))return;}catch(e){last=e.message;}await new Promise(r=>setTimeout(r,80));}throw Error('等待失败 '+label+'，实际：'+JSON.stringify(last));}
+function expect(loc){return {toHaveCount:n=>until(()=>loc.count(),v=>v===n,'count '+n),not:{toHaveCount:n=>until(()=>loc.count(),v=>v!==n,'not count '+n)},toHaveText:t=>until(()=>loc.innerText(),v=>v.trim()===t,'text '+t),toContainText:t=>until(()=>loc.innerText(),v=>v.includes(t),'contains '+t),toHaveValue:t=>until(()=>loc.inputValue(),v=>v===t,'value '+t)};}
+expect.poll=fn=>({toBe:t=>until(fn,v=>v===t,'value '+t)});
+const root=path.resolve(__dirname,'..');
+const out=process.env.LV_EVIDENCE_DIR||path.join(root,'交付物','v0.10.1-验收');fs.mkdirSync(out,{recursive:true});
+const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'lv-ui-workflow-'));let app,main,quick,idea;const errors=[],steps=[];
+const step=n=>{steps.push(n);console.log('✓ '+n);};
+async function launch(){
+ app=await pw._electron.launch({executablePath:path.join(root,'node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'),args:[root],env:{...process.env,LV_CONFIG_DIR:tmp}});
+ app.on('window',p=>p.on('pageerror',e=>errors.push(p.url()+': '+e.message)));
+ await expect.poll(()=>app.windows().some(p=>p.url().includes('/overlay/'))).toBe(true);
+ const overlay=app.windows().find(p=>p.url().includes('/overlay/'));await overlay.evaluate(()=>window.vault.overlayOpenMain());
+ await expect.poll(()=>app.windows().some(p=>p.url().includes('/main/index.html'))).toBe(true);
+ main=app.windows().find(p=>p.url().includes('/main/index.html'));await main.waitForSelector('#ingestBtn');
+ await main.evaluate(()=>window.vault.openQuick());await expect.poll(()=>app.windows().some(p=>p.url().includes('/quick/'))).toBe(true);
+ quick=app.windows().find(p=>p.url().includes('/quick/'));await quick.waitForSelector('#mainInput');
+}
+const item=id=>main.evaluate(id=>window.vault.get(id),id);
+const list=()=>main.evaluate(()=>window.vault.list({limit:100}));
+async function show(id){await main.evaluate(id=>window.vault.showItem(id),id);await expect(main.locator('#detail .dtitle')).not.toHaveCount(0);}
+async function saveForm(values){for(const [k,v] of Object.entries(values))await main.locator('.mask').last().locator(`[data-k="${k}"]`).fill(v);await main.locator('.mask').last().locator('[data-s]').click();}
+async function choose(key){await main.locator('.mask').last().locator(`.rev-item[data-k="${key}"]`).click();}
+(async()=>{
+ fs.writeFileSync(path.join(tmp,'config.json'),JSON.stringify({vaultBridge:{enabled:false},notifyOnIngest:false,autoReview:false,overlayVisible:false}));
+ await launch();
+ await quick.locator('#mainInput').fill('镜头提示词：先固定人物');
+ await quick.locator('#mainInput').evaluate(el=>el.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',isComposing:true,bubbles:true})));
+ assert.equal((await list()).total,0);
+ await quick.locator('#mainInput').press('Shift+Enter');await quick.locator('#mainInput').press('End');await quick.locator('#mainInput').press('Enter');
+ await expect(quick.locator('#status')).toHaveText('已记下');const note=(await list()).items[0];assert.equal(note.kind,'note');
+ step('真实快捷键：中文输入法不误提交，Enter 保存笔记');
+ const attachment=path.join(tmp,'分镜说明.md');fs.writeFileSync(attachment,'# 分镜说明\n角色衣服固定。');
+ await quick.locator('#mainInput').fill('未提交的附件草稿');
+ await quick.evaluate(p=>{files.push(p);renderFiles();dirty();},attachment);
+ await quick.locator('#closeBtn').click();
+ await app.close();await launch();
+ await expect(quick.locator('#mainInput')).toHaveValue('未提交的附件草稿');await expect(quick.locator('#picStrip')).toContainText('分镜说明.md');
+ await quick.locator('#submitBtn').click();await expect(quick.locator('#status')).toHaveText('已记下');
+ const file=(await list()).items.find(x=>x.kind==='file');assert.ok(file.files[0].path!==attachment&&fs.existsSync(file.files[0].path));assert.equal(file.notes,'未提交的附件草稿');
+ step('重启恢复文字及附件草稿，附件与说明一起归档');
+ const raw='阿宁 2026/9/22 09:12\n分镜先画九宫格，再写提示词\n[文件] 九宫格模板.md\n---\n我 2026/9/22 09:14\n收到，我下午试一次';
+ await quick.locator('#mainInput').fill(raw);await quick.locator('#mainInput').dispatchEvent('paste');
+ await expect(quick.locator('.msgcard')).toHaveCount(2);await expect(quick.locator('#chatCards')).toContainText('待补附件');
+ await quick.locator('#chatTitle').fill('分镜方法讨论');await quick.locator('#chatSource').fill('微信 · 创作讨论');
+ await quick.screenshot({animations:'disabled',path:path.join(out,'01-聊天导入.png')});
+ await quick.locator('#submitBtn').click();await expect(quick.locator('#status')).toHaveText('已记下');
+ let chat=(await list()).items.find(x=>x.kind==='chat');assert.equal(chat.raw_text,raw);assert.equal(chat.chat_source,'微信 · 创作讨论');assert.ok(chat.messages[0].attachment.pending);
+ step('整段聊天自动拆分，保留原文、来源与待补附件');
+ await show(chat.id);await expect(main.locator('#detail .dtitle')).toHaveText('分镜方法讨论');
+ await main.locator('#appendChat').click();await saveForm({text:raw+'\n---\n我 2026/9/22 11:20\n收到，我下午试一次\n---\n阿宁 2026/9/22 12:00\n记下效果'});
+ await expect(main.locator('.flow-preview')).toContainText('确定重复 2');await main.locator('.flow-preview [data-save]').click();
+ await expect.poll(async()=>(await item(chat.id)).messages.length).toBe(4);
+ await main.locator('#appendChat').click();await saveForm({text:'收到，我下午试一次'});await expect(main.locator('.flow-preview')).toContainText('可能重复 1');await main.locator('.flow-preview [data-save]').click();
+ await expect.poll(async()=>(await item(chat.id)).messages.length).toBe(5);
+ await main.locator('#appendChat').click();await saveForm({text:'记下效果'});await main.locator('.flow-preview [data-keep]').uncheck();await main.locator('.flow-preview [data-save]').click();
+ await expect.poll(async()=>(await item(chat.id)).import_batches.length).toBe(4);
+ chat=await item(chat.id);assert.equal(chat.messages.length,5);assert.equal(chat.messages.filter(x=>x.possibleDup).length,1);
+ step('追加预览去重，同文不同时间保留，跳过本次重复不删除历史消息');
+ const tpl=path.join(tmp,'九宫格模板.md');fs.writeFileSync(tpl,'九宫格模板：环境、人物、动作');
+ await app.evaluate(({dialog},p)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[p]});},tpl);
+ await main.locator('[data-pend]').click();await expect.poll(async()=>!!(await item(chat.id)).messages[0].attachment.pending).toBe(false);
+ await main.locator('[data-editmsg="1"]').click();await saveForm({speaker:'小周',time:'2026/9/22 09:14',text:'收到，我下午试一次'});
+ await expect.poll(async()=>(await item(chat.id)).messages[1].speaker).toBe('小周');assert.ok((await item(chat.id)).raw_text.includes('我 2026/9/22 09:14'));
+ step('补齐真实附件并修正消息，导入原文不被覆盖');
+ await main.locator('[data-select-message]').nth(0).check();await main.locator('[data-select-message]').nth(1).check();await main.locator('#extractSelected').click();await choose('method');
+ await saveForm({title:'九宫格分镜法',body:'固定人物服装，再依次规划环境、镜头和动作。'});
+ await expect.poll(async()=>(await main.evaluate(id=>window.vault.extractByItem(id),chat.id)).length).toBe(1);
+ const ex=(await main.evaluate(id=>window.vault.extractByItem(id),chat.id))[0];assert.equal(ex.source_message_ids.length,2);
+ await main.locator('[data-exopen]').click();await expect(main.locator('[data-exbody]')).toHaveValue('固定人物服装，再依次规划环境、镜头和动作。');
+ await main.locator('[data-exbody]').fill('固定人物服装；先九宫格，再写镜头提示词。');await main.locator('.mask [data-save]').click();
+ await main.locator('[data-exopen]').click();await main.locator('.mask [data-source]').click();await expect(main.locator('.cf-msg.hl')).toHaveCount(1);
+ await main.screenshot({animations:'disabled',path:path.join(out,'02-聊天提取与来源.png')});
+ step('多消息提取、正文编辑与来源定位双向可用');
+ await show(note.id);await expect(main.locator('#detail .dtitle')).toHaveText(note.title);
+ await main.locator('#useBtn').click();await saveForm({purpose:'制作 15 秒样片',result:'人物稳定，动作还需优化',related_url:'https://example.com/result'});
+ await expect.poll(async()=>(await item(note.id)).use_count).toBe(1);
+ await main.locator('#improveBtn').click();await choose('ver');await saveForm({problem:'动作太僵硬',change:'加入停顿和微表情',reason:'第一次试片反馈',fullVersion:'固定服装，触发后停顿，再做微表情和动作。'});
+ await expect.poll(async()=>(await item(note.id)).versions.length).toBe(2);
+ const updated=await item(note.id);assert.equal(await main.evaluate(id=>window.vault.versionCopy(id).then(r=>r.text),note.id),'固定服装，触发后停顿，再做微表情和动作。');
+ await main.locator('[data-vview]').first().click();await expect(main.locator('.mask .mbody')).toContainText('先固定人物');await main.locator('.mask [data-x]').click();
+ await main.locator('[data-vrest]').first().click();await expect.poll(async()=>(await item(note.id)).versions.length).toBe(3);
+ await main.locator(`[data-vcur="${updated.versions[1].id}"]`).click();await expect(main.locator('#detail')).toContainText('固定服装，触发后停顿');
+ await main.screenshot({animations:'disabled',path:path.join(out,'03-使用与版本.png')});
+ step('使用记录、改进版本、历史查看和恢复均可持久化');
+ await main.locator('#linkIdeaBtn').click();await saveForm({text:'用九宫格做一条短片',next:'先做 3 个镜头'});
+ await main.evaluate(()=>window.vault.ideasOpen());await expect.poll(()=>app.windows().some(p=>p.url().includes('/idea/'))).toBe(true);
+ idea=app.windows().find(p=>p.url().includes('/idea/'));await expect(idea.locator('.idea')).toHaveCount(1);
+ const ideaId=await idea.locator('.idea').getAttribute('data-id');await idea.locator('[data-week]').click();
+ await idea.locator('[data-edit]').click();await idea.locator('[data-key="status"]').selectOption('try');await idea.locator('[data-key="remind_at"]').fill('2026-09-25T10:00');await idea.locator('#linkSearch').fill('分镜方法讨论');await expect(idea.locator('#linkResults [data-link]')).toHaveCount(1);await idea.locator('#linkResults [data-link]').click();await idea.locator('#saveIdea').click();
+ await expect(idea.locator('.idea')).toContainText('准备尝试');await expect(idea.locator('[data-source]')).toHaveCount(2);
+ await idea.locator('[data-edit]').click();await idea.locator('[data-key="status"]').selectOption('done');await idea.locator('[data-key="result_note"]').fill('完成 15 秒样片，人物更稳定');await idea.locator('[data-key="result_url"]').fill('https://example.com/demo');await idea.locator('#saveIdea').click();
+ await idea.locator('#filter').selectOption('done');await expect(idea.locator('.idea')).toContainText('完成 15 秒样片');
+ await idea.locator('[data-source]').first().click();await expect(main.locator('#detail .dtitle')).toHaveText(note.title);
+ await idea.screenshot({animations:'disabled',path:path.join(out,'04-点子成果.png')});
+ step('点子关联资料、下一步、提醒、落实成果与来源跳转可用');
+ await idea.locator('[data-edit]').click();await idea.locator('[data-key="status"]').selectOption('parked');await idea.locator('#saveIdea').click();await idea.locator('#filter').selectOption('parked');await expect(idea.locator('.idea')).toContainText('暂停提醒');
+ await idea.locator('[data-edit]').click();await idea.locator('[data-key="status"]').selectOption('done');await idea.locator('#saveIdea').click();
+ step('点子搁置及重新推进保留历程');
+ await show(note.id);await main.locator('#reCatBtn').click();await choose('工具效率');await choose('one');
+ assert.equal((await item(note.id)).category_locked,true);const rec=await main.evaluate(id=>window.vault.reclassify(id),note.id);assert.equal(rec.category,'工具效率');
+ step('手动分类锁定，重新归类不覆盖用户选择');
+ await main.locator('#reviewBtn').click();await choose('weekly');await expect(main.locator('.mask .mbody')).toContainText('本周成果');await expect(main.locator('.mask .mbody')).toContainText('完成 15 秒样片');await expect(main.locator('.mask .mbody')).toContainText('人物稳定');
+ await main.screenshot({animations:'disabled',path:path.join(out,'05-真实成果复盘.png')});await main.locator('.mask').evaluate(el=>el.remove());
+ step('从真实使用和落实记录生成周复盘');
+ const backup=path.join(tmp,'backup.json');await app.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},backup);await main.evaluate(()=>window.vault.exportJson());const b=JSON.parse(fs.readFileSync(backup));assert.ok(b.items.length>=3&&b.ideas.length&&b.extracts.length&&b.reviews.length);
+ await app.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},backup);const restored=await main.evaluate(()=>window.vault.importJson());assert.ok(restored.ok&&restored.added===0);assert.ok(fs.existsSync(restored.backupDir));
+ step('界面导出和恢复：保留新增结构，重复导入不重复创建');
+ await main.evaluate(()=>window.vault.openQuick());await quick.locator('#mainInput').fill('第二天继续完善的想法');await app.close();await launch();await expect(quick.locator('#mainInput')).toHaveValue('第二天继续完善的想法');
+ assert.equal((await item(note.id)).versions.length,3);assert.equal((await item(chat.id)).messages.length,5);assert.equal((await main.evaluate(()=>window.vault.ideasList())).done.length,1);
+ step('再次重启：退出时草稿、聊天、版本和点子成果全部保留');
+ assert.deepEqual(errors,[]);step('真实页面没有 JavaScript 错误');
+ console.log('UI_WORKFLOW_OK '+steps.length);
+ fs.writeFileSync(path.join(out,'ui-result.json'),JSON.stringify({ok:true,steps,errors,version:JSON.parse(fs.readFileSync(path.join(root,'package.json'))).version},null,2));
+})().catch(async e=>{console.error(e.stack);fs.writeFileSync(path.join(out,'ui-result.json'),JSON.stringify({ok:false,steps,errors,error:e.stack},null,2));try{if(main)await main.screenshot({animations:'disabled',path:path.join(out,'failure.png')});}catch{}process.exitCode=1;}).finally(async()=>{if(app)try{await app.close();}catch{}fs.rmSync(tmp,{recursive:true,force:true});});

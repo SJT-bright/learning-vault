@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+  body { height: 100vh; position: relative; user-select: none; -webkit-user-select: none; }
+  button { appearance: none; -webkit-appearance: none; outline: none; -webkit-tap-highlight-color: transparent; }
+
+  /* ============ 32px 圆形悬浮按钮 · 80×80 透明承载区 ============
+     用户确认的最终版式（勿回退成竖条）：
+     · 承载窗口 80×80 全透明，鼠标热区大于视觉，好点好拖；
+     · 圆钮 32px 距右缘 4px、垂直居中，浅绿底 + 深绿加号；
+     · 鼠标经过只让加号微亮，圆面底色/阴影/尺寸绝不变化（无闪白方块）；
+     · 上下拖动由主进程完成，横坐标固定。 */
+  #bar {
+    position: absolute; bottom: 4px; right: 4px;
+    width: 32px; height: 32px; padding: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle at 34% 30%, #f4f9f0 0%, #e6efdf 55%, #d8e6cf 100%);
+    border: 1px solid rgba(255,255,255,.65);
+    box-shadow:
+      0 3px 10px -2px rgba(30, 60, 40, .38),   /* 悬浮落影 */
+      inset 0 1px 0 rgba(255,255,255,.8);      /* 顶部内高光 */
+    display: flex; align-items: center; justify-content: center;
+    cursor: grab; touch-action: none; font: inherit;
+    transition: box-shadow .18s ease, filter .18s ease;
+  }
+  /* 加号：深绿，笔画用两条圆角短棒；hover 亮加号本体 + 圆面微亮高亮 */
+  #bar .plus { position: relative; width: 14px; height: 14px; pointer-events: none; transition: filter .18s; }
+  #bar .plus::before, #bar .plus::after {
+    content: ''; position: absolute; background: #3e7d5b; border-radius: 2px;
+  }
+  #bar .plus::before { left: 50%; top: 0; width: 2.5px; height: 100%; transform: translateX(-50%); }
+  #bar .plus::after  { top: 50%; left: 0; height: 2.5px; width: 100%; transform: translateY(-50%); }
+  #bar:hover .plus { filter: brightness(1.32); }
+  /* 鼠标滑过加号钮：内侧亮环（贴屏幕边也不被窗口裁切）+ 收紧的外泛光；无位移/尺寸变化 */
+  #bar:hover {
+    filter: brightness(1.06);
+    box-shadow:
+      0 3px 10px -2px rgba(30, 60, 40, .38),
+      inset 0 0 0 2px rgba(103, 194, 143, .55),
+      0 0 0 3.5px rgba(103, 194, 143, .35),
+      0 0 10px 1px rgba(103, 194, 143, .38);
+  }
+  /* 按下反馈：轻微压暗，手感更实 */
+  #bar:active { filter: brightness(.97); }
+  #bar:focus-visible { outline: 1.5px solid rgba(62,125,91,.85); outline-offset: 2px; }
+
+  /* 图片收藏类目：在加号上方，两颗圆钮共用屏幕右侧边线。
+     单击打开图片收藏夹画廊窗（与桌面版共用收藏库）。 */
+  #ivChip {
+    position: absolute; top: 4px; right: 4px;
+    width: 32px; height: 32px; padding: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle at 34% 30%, #fbf6ef 0%, #f0e2cf 58%, #e4d0b4 100%);
+    border: 1px solid rgba(255,255,255,.7);
+    box-shadow:
+      0 3px 10px -2px rgba(80, 48, 20, .34),
+      inset 0 1px 0 rgba(255,255,255,.85);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: #c2410c; touch-action: none;
+    transition: box-shadow .18s ease, filter .18s ease;
+  }
+  #ivChip svg { width: 17px; height: 17px; display: block; pointer-events: none; }
+  /* 鼠标滑过图片收藏钮：内侧橙亮环 + 收紧外泛光（贴边不裁切）；与绿色系区分 */
+  #ivChip:hover {
+    filter: brightness(1.07);
+    box-shadow:
+      0 3px 10px -2px rgba(80, 48, 20, .34),
+      inset 0 0 0 2px rgba(236, 154, 84, .6),
+      0 0 0 3.5px rgba(236, 154, 84, .4),
+      0 0 10px 1px rgba(236, 154, 84, .4);
+  }
+  #ivChip:hover svg { filter: brightness(1.18); }
+  #ivChip:active { filter: brightness(.96); }
+  #ivChip:focus-visible { outline: 1.5px solid rgba(194,65,12,.85); outline-offset: 2px; }
+  /* 拖动中只换光标：不改圆面底色/尺寸（避免跟手闪动） */
+  body.dragging #bar { cursor: grabbing; }
+
+  /* 图片收藏钮拖入高亮：橙色光环（拖图片/文件经过上方圆钮时） */
+  #ivChip.over {
+    box-shadow:
+      0 3px 10px -2px rgba(80, 48, 20, .34),
+      inset 0 0 0 2.5px rgba(236, 154, 84, .65),
+      0 0 0 4px rgba(236, 154, 84, .45),
+      0 0 13px 1px rgba(236, 154, 84, .5);
+  }
+  /* 拖入悬停高亮：围绕圆钮的一圈绿光环（只在拖文件/链接经过时出现） */
+  #bar.over {
+    box-shadow:
+      0 3px 10px -2px rgba(30, 60, 40, .38),
+      inset 0 0 0 2.5px rgba(103, 194, 143, .6),
+      0 0 0 4px rgba(103, 194, 143, .42),
+      0 0 13px 1px rgba(103, 194, 143, .48);
+  }
+  /* 入库成功短闪：圆面短暂变亮绿 */
+  #bar.ok { background: radial-gradient(circle at 34% 30%, #e2f5d8 0%, #bfe6c6 55%, #9ed6ae 100%); }
+
+  /* 今日收录角标：深绿药丸，叠在圆钮右上（双角标之一） */
+  #countBadge {
+    position: absolute; top: -4px; right: -3px;
+    min-width: 14px; height: 14px; border-radius: 99px; padding: 0 4px;
+    display: none; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 800; color: #f2f8f0; font-variant-numeric: tabular-nums;
+    background: linear-gradient(180deg, #4d8a67, #2f6a4a);
+    border: 1px solid rgba(255,255,255,.7);
+    box-shadow: 0 2px 5px -1px rgba(30, 60, 40, .5);
+    pointer-events: none;
+  }
+  #countBadge.show { display: flex; }
+
+  /* 待复习徽标：琥珀药丸（与今日收录的深绿区分），呼吸提醒，叠在圆钮右下（双角标之二） */
+  #srsBadge {
+    position: absolute; right: 0; bottom: 0;
+    min-width: 14px; height: 14px; border-radius: 99px; padding: 0 4px;
+    display: none; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 800; color: #5d431c; font-variant-numeric: tabular-nums;
+    background: linear-gradient(180deg, #f2dfa8, #e3bc6c);
+    border: 1px solid rgba(255,255,255,.75);
+    box-shadow: 0 2px 5px -1px rgba(170, 120, 40, .55), 0 0 8px rgba(236,192,106,.35);
+    cursor: pointer;
+    transition: filter .18s ease;
+    animation: srsBreath 2.6s ease-in-out infinite;
+  }
+  #srsBadge:hover { filter: brightness(1.1); }
+  #srsBadge:active { filter: brightness(.96); }
+  #srsBadge.show { display: flex; }
+  #srsBadge:focus-visible { outline: 1.5px solid rgba(227,188,108,.9); outline-offset: 2px; }
+  @keyframes srsBreath { 0%,100% { box-shadow: 0 2px 5px -1px rgba(170,120,40,.55), 0 0 6px rgba(236,192,106,.25); } 50% { box-shadow: 0 2px 5px -1px rgba(170,120,40,.55), 0 0 13px rgba(236,192,106,.55); } }
+  /* 徽标数字变化轻弹：bump 动画类挂徽标本体，短暂覆盖呼吸动画（约 0.25s 后呼吸自动重新开始）；
+   数字文本包在内层 .badge-num，更新时只改文本，不重建徽标 */
+  @keyframes badgeBump {
+    0% { transform: scale(1); }
+    45% { transform: scale(1.3); }
+    100% { transform: scale(1); }
+  }
+  .badge.bump { animation: badgeBump .25s cubic-bezier(.34,1.56,.64,1); }
+  .badge .badge-num { display: inline-block; }
+  @media (prefers-reduced-motion: reduce) { #srsBadge, .badge.bump { animation: none; } }
+
+  /* ---- 拖入粒子轨道（向加号中心内吸） ---- */
+  .fx { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity .2s; }
+  body.hovering .fx { opacity: 1; }
+  .ptc { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: #8fe0b4;
+    box-shadow: 0 0 6px rgba(143,224,180,.9); opacity: 0; }
+  body.hovering .ptc { animation: suck 1.1s linear infinite; animation-delay: var(--d); }
+  @keyframes suck {
+    0%   { opacity: 0; transform: translate(88px, calc(60px + var(--y))) scale(.5); }
+    20%  { opacity: 1; }
+    100% { opacity: 0; transform: translate(58px, calc(60px + var(--y) * .12)) scale(.3); }
+  }
+
+  /* ---- 入库冲击波 + 爆裂（以加号中心 60,60 为圆心） ---- */
+  .burst-ring {
+    position: absolute; left: 60px; top: 60px; width: 32px; height: 32px;
+    transform: translate(-50%, -50%); border-radius: 50%;
+    border: 1.5px solid rgba(143,224,180,.7); opacity: 0; pointer-events: none;
+  }
+  .burst-ring.go { animation: burst .65s cubic-bezier(.16,1,.3,1) both; }
+  @keyframes burst {
+    0% { opacity: .95; transform: translate(-50%, -50%) scale(.6); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(3); }
+  }
+  .spark { position: absolute; left: 60px; top: 60px; width: 3.5px; height: 3.5px; border-radius: 50%;
+    background: #9fe3bd; box-shadow: 0 0 6px rgba(159,227,189,.95); pointer-events: none; opacity: 0; }
+  .spark.go { animation: spark .58s cubic-bezier(.16,1,.3,1) both; }
+  @keyframes spark {
+    0% { opacity: 1; transform: rotate(var(--sa)) translateX(4px) scale(1); }
+    100% { opacity: 0; transform: rotate(var(--sa)) translateX(34px) scale(.3); }
+  }
+
+  /* 首次出现：从屏幕右缘虚化浮现 */
+  @keyframes fxIn {
+    0%   { opacity: 0; filter: blur(10px); transform: translateX(26px); }
+    100% { opacity: 1; filter: blur(0); transform: translateX(0); }
+  }
+  body.appear #bar { animation: fxIn .34s cubic-bezier(.22,1,.36,1) both; }
+  @media (prefers-reduced-motion: reduce) {
+    body.appear #bar, body.hovering .ptc, .badge.bump { animation: none; }
+  }
+</style>
+</head>
+<body class="appear">
+  <div class="fx" aria-hidden="true">
+    <div class="ptc" style="--y:-26px;--d:0s"></div>
+    <div class="ptc" style="--y:-14px;--d:.2s"></div>
+    <div class="ptc" style="--y:0px;--d:.4s"></div>
+    <div class="ptc" style="--y:14px;--d:.6s"></div>
+    <div class="ptc" style="--y:26px;--d:.8s"></div>
+  </div>
+  <div class="burst-ring" id="burstRing" aria-hidden="true"></div>
+  <button id="ivChip" type="button" aria-label="图片收藏" title="图片收藏">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="4"></rect>
+      <circle cx="9" cy="9.5" r="1.7"></circle>
+      <path d="M4.5 19l5.5-5.5 4 3.5 3-2.5 4.5 4"></path>
+    </svg>
+  </button>
+  <button id="bar" type="button" aria-label="快速收录；按住可上下拖动" title="按住上下拖动 · 单击快速收录 · 上方圆钮打开图片收藏 · 右键还有图片收藏 · 拖文件/链接进来直接入库">
+    <span class="plus" aria-hidden="true"></span>
+    <span id="countBadge" class="badge"><span class="badge-num">0</span></span>
+  </button>
+  <button id="srsBadge" class="badge" type="button" title="今日待复习 · 点击开始复习" aria-label="开始今日复习"><span class="badge-num">0</span></button>
+<script>
+  const bar = document.getElementById('bar');
+  let down = null, suppressClick = false;
+  let todayCount = 0, dueCount = 0;
+  function updateHint() {
+    const summary = `今日已收录 ${todayCount} 条${dueCount ? ` · 待复习 ${dueCount} 张` : ''}`;
+    bar.title = `按住上下拖动 · 单击快速收录 · 上方圆钮打开图片收藏 · 右键还有图片收藏 · 拖文件/链接进来直接入库\n${summary}`;
+    bar.setAttribute('aria-label', `快速收录；按住可上下拖动；${summary}`);
+  }
+
+  // ---- 单击 / 拖动：Pointer capture 跨出窗口仍能收到松手；
+  //      跟手坐标由渲染层在窗口级捕获上报（macOS 系统注入拖动可能不产生 pointerdown，
+  //      但按住期间 pointermove 会持续派发到窗口——隐式窗口捕获），
+  //      主进程只取 y（横坐标固定）并保留光标轮询兜底 ----
+  bar.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !e.isPrimary) return;
+    suppressClick = false;
+    down = { id: e.pointerId, sx: e.screenX, sy: e.screenY, moved: false };
+    bar.setPointerCapture(e.pointerId);
+    document.body.classList.add('dragging');
+    window.vault.dragStart({ x: e.screenX, y: e.screenY }); // 上报锚点：拖动位移以此为基准
+  });
+  // 拖动跟手统一走窗口级捕获：既覆盖常规拖动（事件 target 随光标漂移），
+  // 也覆盖「按键已按下但没有 pointerdown」的系统注入拖动（就地起拖，锚点由主进程按新手势识别）
+  const ivChip = document.getElementById('ivChip');
+  let chipPointer = false;
+  ivChip.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !e.isPrimary) return;
+    chipPointer = true;
+    e.stopPropagation();
+  });
+  ivChip.addEventListener('pointerup', () => { chipPointer = false; });
+  ivChip.addEventListener('pointercancel', () => { chipPointer = false; });
+  ivChip.addEventListener('click', (e) => {
+    e.stopPropagation();
+    chipPointer = false;
+    if (window.vault.ivOpen) window.vault.ivOpen();
+  });
+  ivChip.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    finish(true);
+    window.vault.overlayMenu();
+  });
+
+  window.addEventListener('pointermove', (e) => {
+    const onChip = chipPointer || (e.target && e.target.closest && e.target.closest('#ivChip'));
+    if (!down && onChip) return; // 按在图片收藏上时不要把悬浮钮拖走；已经在拖加号则继续跟手
+    if (!down && e.buttons) {
+      down = { id: e.pointerId, sx: e.screenX, sy: e.screenY, moved: true };
+      suppressClick = true;
+      document.body.classList.add('dragging');
+    }
+    if (!down || down.id !== e.pointerId) return;
+    if (e.buttons === 0) { finish(true); return; }
+    if (Math.abs(e.screenX - down.sx) > 3 || Math.abs(e.screenY - down.sy) > 3) down.moved = true;
+    window.vault.dragMove({ x: e.screenX, y: e.screenY });
+  }, true);
+  bar.addEventListener('pointerup', (e) => { if (down && down.id === e.pointerId) finish(false); });
+  bar.addEventListener('pointercancel', () => finish(true));
+  bar.addEventListener('lostpointercapture', () => finish(true));
+  window.addEventListener('blur', () => { finish(true); clearDropHighlight(); });
+  function finish(cancelled) {
+    if (!down) return;
+    const d = down;
+    down = null;
+    suppressClick = cancelled || d.moved;
+    window.vault.dragEnd();
+    document.body.classList.remove('dragging');
+    if (bar.hasPointerCapture(d.id)) bar.releasePointerCapture(d.id);
+  }
+  // 单击（未移动、非取消）→ 快速收录；拖动结束的 click 与键盘触发（detail===0）都要放行
+  bar.addEventListener('click', (e) => {
+    if (suppressClick && e.detail !== 0) { suppressClick = false; return; }
+    window.vault.overlayOpenQuick();
+  });
+
+  // ---- 贴边模式兼容：主进程仍推 'dock-right' 等模式串；现版横坐标固定贴右缘，
+  //      视觉不再区分三态，仅保留协议接收避免旧通道报错 ----
+  function normalizeEdgeMode(d) {
+    if (d === 'dock-right' || d === 'dock-left' || d === 'float') return d;
+    if (d === true) return 'float';        // 旧协议：floating = true
+    if (d === false) return 'dock-right';  // 旧协议：floating = false
+    return 'dock-right';
+  }
+  if (window.vault.onOverlayEdge) window.vault.onOverlayEdge((d) => { void normalizeEdgeMode(d); });
+
+  // 右键 → 原生菜单（窗口窄，主进程弹）
+  bar.addEventListener('contextmenu', (e) => { e.preventDefault(); finish(true); window.vault.overlayMenu(); });
+
+  // ---- 拖入特效 + 拖放直收 ----
+  function clearDropHighlight() {
+    bar.classList.remove('over');
+    ivChip.classList.remove('over');
+    document.body.classList.remove('hovering');
+  }
+  // 拖入物悬停在哪个按钮上，哪个按钮亮光环：上半窗 → 图片收藏（橙），下半窗 → 加号（绿）
+  // 以两个按钮的视觉矩形判定，鼠标在间隙时两个都不亮（光环跟随目标，不整窗乱亮）
+  function updateDropTarget(e) {
+    const onIv = pointInRect(e, ivChip);
+    const onBar = pointInRect(e, bar);
+    ivChip.classList.toggle('over', onIv);
+    bar.classList.toggle('over', onBar);
+  }
+  function pointInRect(e, el) {
+    const r = el.getBoundingClientRect();
+    const pad = 3; // 轻微外扩；两钮间隙 8px，互不串亮
+    return e.clientX >= r.left - pad && e.clientX <= r.right + pad &&
+           e.clientY >= r.top - pad && e.clientY <= r.bottom + pad;
+  }
+  window.addEventListener('dragenter', (e) => {
+    document.body.classList.add('hovering');
+    updateDropTarget(e);
+  });
+  window.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    updateDropTarget(e);
+  });
+  window.addEventListener('dragleave', (e) => {
+    if (!e.relatedTarget || e.clientX <= 0 || e.clientY <= 0 || e.clientX >= innerWidth || e.clientY >= innerHeight) {
+      clearDropHighlight();
+    } else {
+      updateDropTarget(e); // 在窗内两个按钮间移动：光环跟随
+    }
+  });
+  window.addEventListener('drop', (e) => {
+    e.preventDefault(); clearDropHighlight();
+    const dt = e.dataTransfer;
+    if (!dt) return;
+    const filePaths = dt.files && dt.files.length
+      ? [...dt.files].map(f => window.vault.pathForFile(f)).filter(Boolean) : [];
+    const uri = (dt.getData('text/uri-list') || '').split('\n').find(line => line.trim() && !line.startsWith('#'));
+    const txt = (dt.getData('text/plain') || '').trim();
+    if (filePaths.length) {
+      burst(); okFlash();
+      window.vault.overlayIngest({ kind: 'file', filePaths, notes: '' });
+    } else if (uri && /^https?:\/\//i.test(uri.trim())) {
+      burst(); okFlash();
+      window.vault.overlayIngest({ kind: 'url', url: uri.trim(), notes: '' });
+    } else if (txt) {
+      burst();
+      window.vault.overlayQuickWith({ notes: txt });
+    }
+  });
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape') clearDropHighlight(); });
+  // 拖放中断/结束兜底：dragend、pointercancel、未按键的 pointermove 都必须清掉绿色高亮，
+  // 防止拖放被系统中断后光环残留（window 级监听，避免事件不经过按钮时漏清）
+  window.addEventListener('dragend', clearDropHighlight);
+  window.addEventListener('pointercancel', () => { finish(true); clearDropHighlight(); });
+  window.addEventListener('pointermove', (e) => { if (!e.buttons) clearDropHighlight(); });
+
+  function burst() {
+    const ring = document.getElementById('burstRing');
+    ring.classList.remove('go'); void ring.offsetWidth; ring.classList.add('go');
+    for (let i = 0; i < 10; i++) {
+      const s = document.createElement('div');
+      s.className = 'spark';
+      s.style.setProperty('--sa', (i * 36 + Math.random() * 18) + 'deg');
+      document.body.appendChild(s);
+      s.classList.add('go');
+      setTimeout(() => s.remove(), 700);
+    }
+  }
+  function okFlash() {
+    bar.classList.add('ok');
+    setTimeout(() => bar.classList.remove('ok'), 1200);
+  }
+
+  // 徽标数字写入：返回旧文本，供 bump 判断数字是否真的变化
+  function setBadgeNum(badge, txt) {
+    const num = badge.querySelector('.badge-num');
+    const prev = num ? num.textContent : '';
+    if (num) num.textContent = txt;
+    return prev;
+  }
+
+  // 徽标轻弹 scale 1→1.3→1：animationend 摘除，300ms 超时兼底
+  // （动画被系统禁用/标签页后台时 animationend 不触发，避免类名残留）
+  function bumpBadge(el) {
+    if (!el || el.classList.contains('bump')) return;
+    el.classList.add('bump');
+    const stop = () => el.classList.remove('bump');
+    el.addEventListener('animationend', stop, { once: true });
+    setTimeout(stop, 300);
+  }
+
+  // 今日计数徽标
+  function setCount(n) {
+    todayCount = Math.max(0, Number(n) || 0);
+    const b = document.getElementById('countBadge');
+    if (!b) return;
+    const wasShown = b.classList.contains('show');
+    const prev = setBadgeNum(b, todayCount > 99 ? '99+' : todayCount);
+    b.classList.toggle('show', todayCount > 0);
+    // 数字变化且徽标可见才弹：隐藏（归 0）与首次出现都不弹
+    if (todayCount > 0 && wasShown && prev !== b.textContent) bumpBadge(b);
+    updateHint();
+  }
+  if (window.vault.onOverlayCount) window.vault.onOverlayCount(setCount);
+
+  // 🔁 待复习徽标（琥珀小圆点 + 数字）：余光可见今天还有没还的「记忆债」，点击直达复习窗
+  function setSrs(n, extra) {
+    dueCount = Math.max(0, Number(n) || 0);
+    const s = document.getElementById('srsBadge');
+    if (!s) return;
+    const wasShown = s.classList.contains('show');
+    const prev = setBadgeNum(s, dueCount > 99 ? '99+' : dueCount);
+    s.classList.toggle('show', dueCount > 0);
+    if (dueCount > 0 && wasShown && prev !== s.textContent) bumpBadge(s);
+    const plan = extra && extra.plan;
+    const total = extra && Number.isFinite(extra.total) ? extra.total : dueCount;
+    s.title = plan
+      ? `实际到期 ${total} 张 · 积压建议：今天做 ${plan.suggestedLimit} 张，约 ${plan.spreadDays} 天消化 · 点击开始复习`
+      : `今日待复习 ${dueCount} 张 · 点击开始复习`;
+    s.setAttribute('aria-label', s.title);
+    updateHint();
+  }
+  document.getElementById('srsBadge').addEventListener('click', () => window.vault.srsOpen());
+  if (window.vault.onOverlaySrs) window.vault.onOverlaySrs(setSrs);
+  (async () => { try { if (window.vault.srsCount) setSrs(await window.vault.srsCount()); } catch {} })();
+</script>
+</body>
+</html>

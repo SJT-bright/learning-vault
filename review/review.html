@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<style>
+  /* 复习窗 · 暗色专注主题（一屏一卡，零干扰） */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; font-family: -apple-system, "PingFang SC", sans-serif; color: #e8efe9; overflow: hidden; }
+  body { display: flex; flex-direction: column; background: radial-gradient(1200px 800px at 20% -10%, #16241c 0%, #0d120f 55%, #0a0e0c 100%); }
+  :root { --ink-2: #9fb2a6; --ink-3: #6d7f72; --green: #43966e; --amber: #d98e4f; }
+  .titlebar {
+    -webkit-app-region: drag; flex: none; height: 42px; display: flex; align-items: center;
+    padding: 0 12px; font-size: 12.5px; font-weight: 700; color: #cfe0d5; justify-content: space-between;
+    border-bottom: 1px solid rgba(255,255,255,.07); user-select: none;
+  }
+  .titlebar .tb-left { display: flex; align-items: center; gap: 8px; }
+  .titlebar .tb-right { display: flex; align-items: center; gap: 8px; }
+  .titlebar button {
+    -webkit-app-region: no-drag; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06);
+    color: rgba(232,239,233,.65); width: 22px; height: 22px; border-radius: 6px; cursor: pointer; font-size: 11px;
+  }
+  .titlebar button:hover { color: #fff; background: rgba(255,255,255,.12); }
+  /* 已暂停面板：卡片行 + 恢复按钮 */
+  .susp-list { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 8px; max-height: 100%; overflow-y: auto; }
+  .susp-head { font-size: 13px; font-weight: 700; color: #cfe0d5; padding: 2px 2px 6px; }
+  .susp-head small { font-weight: 400; color: var(--ink-3); margin-left: 8px; }
+  .susp-row {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px;
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+  }
+  .susp-row .s-main { flex: 1; min-width: 0; }
+  .susp-row .s-front { font-size: 13px; color: #e8efe9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .susp-row .s-meta { font-size: 10.5px; color: var(--ink-3); margin-top: 3px; }
+  .susp-empty { text-align: center; color: var(--ink-2); font-size: 13px; line-height: 2; }
+  .stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 18px 26px; gap: 14px; }
+  .card {
+    width: 100%; max-width: 440px; min-height: 230px; border-radius: 16px; padding: 26px 24px;
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); border-bottom-color: rgba(0,0,0,.4);
+    box-shadow: 0 18px 42px -18px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08);
+    display: flex; flex-direction: column; gap: 12px; cursor: pointer; position: relative;
+    animation: flipIn .24s cubic-bezier(.22,1,.36,1) both;
+  }
+  @keyframes flipIn { from { opacity: 0; transform: perspective(700px) rotateX(8deg) translateY(10px); } to { opacity: 1; transform: none; } }
+  /* 切卡/翻卡过渡（与 flipIn 首次进场区分）：挂在 stage 直接子级 .card-wrap 上，
+     避免与 .card 自身的 flipIn 抢 animation 属性；评分按钮/操作行不参与 */
+  .card-wrap { width: 100%; max-width: 440px; display: flex; }
+  .card-wrap > .card { flex: 1; }
+  .card-wrap.swap-in { animation: cardSwap .22s cubic-bezier(.22,1,.36,1) both; }
+  @keyframes cardSwap {
+    from { opacity: 0; transform: translateY(10px); filter: blur(4px); }
+    to   { opacity: 1; transform: none; filter: blur(0); }
+  }
+
+  /* 窗口级虚化渐入：每次显示（首开或从托盘唤出）整窗虚化→聚焦 */
+  @keyframes winIn {
+    0%   { opacity: 0; filter: blur(16px) saturate(1.35); transform: perspective(1000px) translateZ(-60px) scale(1.05); }
+    55%  { opacity: 1; }
+    100% { opacity: 1; filter: blur(0) saturate(1); transform: perspective(1000px) translateZ(0) scale(1); }
+  }
+  body.win-in { animation: winIn .3s cubic-bezier(.22,1,.36,1) both; }
+  @media (prefers-reduced-motion: reduce) {
+    body.win-in { animation: none; }
+    .card-wrap.swap-in { animation: none; }
+  }
+  .card .src { font-size: 11px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .front { font-size: 16px; font-weight: 650; line-height: 1.6; color: #f0f6f1; }
+  .card .back { font-size: 14px; line-height: 1.8; color: #cfe0d5; white-space: pre-wrap; word-break: break-word;
+    border-top: 1px dashed rgba(255,255,255,.14); padding-top: 12px; }
+  .card .hint-key { font-size: 11px; color: var(--ink-3); margin-top: auto; }
+  .grades { display: flex; gap: 10px; width: 100%; max-width: 440px; }
+  .gbtn {
+    flex: 1; border-radius: 12px; padding: 13px 0; font-size: 13.5px; font-weight: 700; cursor: pointer; text-align: center;
+    border: 1px solid rgba(255,255,255,.12); border-bottom-color: rgba(0,0,0,.4);
+    transition: transform .12s cubic-bezier(.22,1,.36,1), filter .12s;
+  }
+  .gbtn:hover { transform: translateY(-2px); filter: brightness(1.15); }
+  .gbtn:active { transform: translateY(1px); }
+  .gbtn small { display: block; font-size: 10px; font-weight: 400; opacity: .75; margin-top: 2px; }
+  .g1 { background: rgba(200, 90, 75, .22); color: #f2c4bb; }
+  .g2 { background: rgba(217, 142, 79, .2); color: #f6dfc0; }
+  .g3 { background: rgba(67, 150, 110, .26); color: #cdeeda; }
+  .stats-row { font-size: 11.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .stats-row b { color: #dff0e6; }
+  .empty { text-align: center; color: var(--ink-2); line-height: 2; font-size: 13.5px; }
+  .empty .big { font-size: 42px; display: block; margin-bottom: 8px; }
+  .done-panel { width: 100%; max-width: 440px; text-align: center; animation: flipIn .3s both; }
+  .done-panel .big { font-size: 40px; }
+  .done-panel h2 { font-size: 18px; margin: 8px 0 4px; }
+  .done-panel p { font-size: 12.5px; color: var(--ink-2); line-height: 1.9; }
+  .done-panel .retention { font-size: 30px; font-weight: 800; color: #a8e6c6; margin: 12px 0; font-variant-numeric: tabular-nums; }
+  .footnote { flex: none; padding: 8px 0 10px; text-align: center; font-size: 10.5px; color: var(--ink-3); }
+  .ops-row { display: flex; gap: 8px; width: 100%; max-width: 440px; justify-content: center; flex-wrap: wrap; }
+  .opbtn {
+    border: 1px solid rgba(255,255,255,.13); background: rgba(255,255,255,.05); color: rgba(232,239,233,.75);
+    font-size: 11.5px; padding: 6px 12px; border-radius: 9px; cursor: pointer;
+    transition: background .14s, color .14s, transform .14s;
+  }
+  .opbtn:hover { color: #fff; background: rgba(255,255,255,.13); transform: translateY(-1px); }
+  .opbtn:active { transform: translateY(0.5px); }
+  .opbtn small { opacity: .6; margin-left: 4px; font-size: 10px; }
+  .backlog-tip {
+    width: 100%; max-width: 440px; text-align: center; font-size: 12px; line-height: 1.7;
+    color: #f2e3c4; background: rgba(190, 145, 75, .12); border: 1px solid rgba(190, 145, 75, .3);
+    border-radius: 10px; padding: 9px 12px;
+  }
+  .edit-area { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 8px; }
+  .edit-area label { font-size: 11px; color: var(--ink-3); }
+  .edit-area textarea {
+    width: 100%; font: inherit; font-size: 13px; color: #e8efe9; line-height: 1.6;
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.16); border-radius: 10px;
+    padding: 9px 11px; resize: vertical; outline: none;
+  }
+  .edit-area textarea:focus { border-color: rgba(67,150,110,.6); }
+  .edit-btns { display: flex; gap: 8px; justify-content: flex-end; }
+  kbd { background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.16); border-bottom-width: 2px;
+    border-radius: 4px; padding: 0 6px; font-size: 10px; font-family: inherit; }
+</style>
+</head>
+<body class="win-in">
+  <div class="titlebar">
+    <span class="tb-left">🔁 记忆复习</span>
+    <span class="tb-right">
+      <span class="stats-row" id="prog"></span>
+      <button id="suspBtn" title="查看已暂停的卡片并恢复" style="display:none;width:auto;padding:0 8px">⏸ 已暂停 <span id="suspCount">0</span></button>
+      <button id="closeBtn" title="关闭（窗体常驻，下次秒开）">✕</button>
+    </span>
+  </div>
+  <div class="stage" id="stage"></div>
+  <div class="footnote" id="foot">空格 翻面 · 1/2/3 自评 · S 跳过 · P 暂停 · E 编辑 · Z 撤销 · O 原文 · Esc 关闭</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const stage = $('stage');
+  let queue = [];      // 今日队列
+  let idx = 0;
+  let flipped = false;
+  let session = [];    // 本局评分 [{grade, snapshot}]（快照供撤销）
+  let lastSnapshot = null; // 最近一次评分前的卡状态（撤销用）
+  let editing = false;     // 编辑模式
+  let suspOpen = false;    // 已暂停面板开关
+  let suspended = [];      // 已暂停卡片缓存
+
+  function esc(s) { return String(s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+  // 拉取已暂停列表并刷新标题栏入口（无 IPC 时安静退化为无入口，不报错）
+  async function refreshSuspended() {
+    try {
+      suspended = (typeof window.vault.srsSuspendedList === 'function') ? (await window.vault.srsSuspendedList()) || [] : [];
+    } catch { suspended = []; }
+    const btn = $('suspBtn');
+    if (!btn) return;
+    btn.style.display = suspended.length ? '' : 'none';
+    $('suspCount').textContent = String(suspended.length);
+  }
+
+  async function load() {
+    try {
+      queue = (typeof window.vault.srsQueue === 'function') ? (await window.vault.srsQueue()) : (await window.vault.srsDue()) || [];
+    } catch { queue = []; }
+    idx = 0; flipped = false; session = []; lastSnapshot = null; editing = false;
+    await refreshSuspended();
+    render();
+  }
+
+  // ---- 已暂停面板：列出暂停中的卡，逐张「恢复复习」。恢复只翻 suspended 标记，
+  //      原 due/间隔/难度全部保留，到期的卡自然回到队列（无需手改 JSON） ----
+  function renderSuspended() {
+    $('prog').textContent = '';
+    if (!suspended.length) {
+      stage.innerHTML = `<div class="susp-empty">🌱 没有暂停中的卡片<br>复习时按 P 暂停的卡会出现在这里</div>`;
+      return;
+    }
+    const rows = suspended.map(c => {
+      const src = c.itemTitle ? `来自《${c.itemTitle}》` : (c.kind === 'quote' ? '金句卡' : c.kind === 'star' ? '星标卡' : '记忆卡');
+      const pausedAt = c.suspendedAt ? ` · 暂停于 ${new Date(c.suspendedAt).toLocaleDateString()}` : '';
+      return `<div class="susp-row">
+        <div class="s-main">
+          <div class="s-front">${esc(c.front || '（空卡面）')}</div>
+          <div class="s-meta">${esc(src)}${pausedAt}</div>
+        </div>
+        <button class="opbtn" data-resume="${esc(c.id)}" style="color:#cdeeda;border-color:rgba(67,150,110,.5)">恢复复习</button>
+      </div>`;
+    }).join('');
+    stage.innerHTML = `<div class="susp-list">
+      <div class="susp-head">⏸ 已暂停 ${suspended.length} 张<small>恢复后保留原来的间隔与到期时间，到期的卡会回到队列</small></div>
+      ${rows}
+      <div class="ops-row" style="margin-top:6px"><button class="opbtn" id="suspBack">返回复习</button></div>
+    </div>`;
+    stage.querySelectorAll('[data-resume]').forEach(b => b.addEventListener('click', async () => {
+      try {
+        const r = await window.vault.srsResume(b.dataset.resume);
+        if (r && r.ok === false) { toast2(r.error || '恢复失败'); return; }
+      } catch { toast2('恢复失败'); return; }
+      toast2('已恢复：调度字段原样保留，到期的卡会回到队列');
+      await load();          // 重拉队列与暂停列表（保持 suspOpen=false 回到复习态）
+      suspOpen = false; render();
+    }));
+    $('suspBack').addEventListener('click', () => { suspOpen = false; render(); });
+  }
+
+  // 切卡过渡开关：仅在翻卡/前进（翻面、评分、跳过、暂停、撤销）那一帧为 true，
+  // render() 重建 DOM 时消费后立即复位，避免静止渲染（编辑返回、暂停面板返回等）误触发
+  let swapFresh = false;
+  function render() {
+    // 一次性消费过渡标记：无论本次走哪个分支（空队列/结算/暂停面板）都复位，
+    // 避免在最后一张卡评分后标记泄漏到下一轮的第一张卡上
+    const doSwap = swapFresh;
+    swapFresh = false;
+    if (suspOpen) { renderSuspended(); return; }
+    $('prog').textContent = queue.length ? `第 ${Math.min(idx + 1, queue.length)} / ${queue.length} 张` : '';
+    if (!queue.length) {
+      stage.innerHTML = `<div class="empty"><span class="big">🌱</span>今天没有到期的记忆卡<br>收金句、打星标，或给资料点「🔁 加入复习」<br>它们会按艾宾浩斯曲线自动回来找你${suspended.length ? `<br><button class="opbtn" id="emptySusp" style="margin-top:8px">⏸ 查看 ${suspended.length} 张暂停中的卡片</button>` : ''}</div>`;
+      const es = $('emptySusp');
+      if (es) es.addEventListener('click', () => { suspOpen = true; render(); });
+      return;
+    }
+    if (idx >= queue.length) { renderDone(); return; }
+    const c = queue[idx];
+    const src = c.itemTitle ? `来自《${c.itemTitle}》` : (c.kind === 'quote' ? '金句卡' : c.kind === 'star' ? '星标卡' : '记忆卡');
+    // swapFresh：仅切卡/翻卡这一帧给外层包裹挂一次性滑入；首次进场仍由 .card 的 flipIn 负责
+    stage.innerHTML = `
+      <div class="card-wrap${doSwap ? ' swap-in' : ''}">
+        <div class="card" id="card" title="点它或按空格翻面">
+          <div class="src">${esc(src)}</div>
+          <div class="front">${esc(c.front || '回想一下：')}</div>
+          ${flipped ? `<div class="back">${esc(c.back || '（无背面内容）')}</div>` : ''}
+          <div class="hint-key">${flipped ? '怎么评？键盘 1 / 2 / 3' : '先在心里回想，再按 空格 看答案'}</div>
+        </div>
+      </div>
+      ${flipped ? `<div class="grades">
+        <div class="gbtn g1" data-g="1">忘了<small>1 · 明天再来</small></div>
+        <div class="gbtn g2" data-g="2">模糊<small>2 · 稍后再见</small></div>
+        <div class="gbtn g3" data-g="3">记得<small>3 · 间隔拉长</small></div>
+      </div>` : ''}
+      <div class="ops-row">
+        <button class="opbtn" data-op="skip">跳过 <small>S</small></button>
+        <button class="opbtn" data-op="suspend">暂停这张 <small>P</small></button>
+        <button class="opbtn" data-op="edit">编辑 <small>E</small></button>
+        <button class="opbtn" data-op="undo" ${session.length ? '' : 'disabled style="opacity:.4;cursor:default"'}>撤销上一评分 <small>Z</small></button>
+        ${c.itemId ? `<button class="opbtn" data-op="open">打开原文 <small>O</small></button>` : ''}
+      </div>
+    `;
+    const card = $('card');
+    if (card) card.addEventListener('click', () => { if (!flipped) { flipped = true; swapFresh = true; render(); } });
+    stage.querySelectorAll('.gbtn').forEach(b => b.addEventListener('click', () => grade(Number(b.dataset.g))));
+    stage.querySelectorAll('.opbtn[data-op]').forEach(b => b.addEventListener('click', () => op(b.dataset.op, c)));
+  }
+
+  // ---------- P1 复习窗操作：跳过 / 暂停 / 编辑 / 撤销 / 打开原文 ----------
+  async function op(name, c) {
+    if (!c) return;
+    if (name === 'skip') {
+      try { await window.vault.srsSkip(c.id); } catch {}
+      toast2('已跳过：明天 04:00 再见，这次不评分');
+      idx += 1; flipped = false; swapFresh = true; render();
+    } else if (name === 'suspend') {
+      try { await window.vault.srsSuspend(c.id); } catch {}
+      toast2('这张卡已暂停，可在标题栏「已暂停」里恢复');
+      idx += 1; flipped = false; swapFresh = true;
+      await refreshSuspended();
+      render();
+    } else if (name === 'edit') {
+      editing = true; renderEdit(c);
+    } else if (name === 'undo') {
+      await undoLast();
+    } else if (name === 'open') {
+      try { await window.vault.srsOpenItem(c.id); } catch {}
+    }
+  }
+
+  function toast2(msg) {
+    const t = document.createElement('div');
+    t.textContent = msg;
+    t.style.cssText = 'position:fixed;left:50%;bottom:52px;transform:translateX(-50%);background:rgba(20,28,24,.92);color:#dff0e6;font-size:12px;padding:8px 16px;border-radius:99px;border:1px solid rgba(255,255,255,.14);z-index:9;animation:flipIn .25s both';
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2200);
+  }
+
+  function renderEdit(c) {
+    stage.innerHTML = `
+      <div class="edit-area">
+        <div class="src">编辑卡面 · 来自《${esc(c.itemTitle || '金句卡')}》</div>
+        <label>正面（回想问题）</label>
+        <textarea id="editFront" rows="3">${esc(c.front || '')}</textarea>
+        <label>背面（答案）</label>
+        <textarea id="editBack" rows="4">${esc(c.back || '')}</textarea>
+        <div class="edit-btns">
+          <button class="opbtn" id="editCancel">取消</button>
+          <button class="opbtn" id="editSave" style="color:#cdeeda;border-color:rgba(67,150,110,.5)">保存</button>
+        </div>
+      </div>`;
+    $('editCancel').addEventListener('click', () => { editing = false; render(); });
+    $('editSave').addEventListener('click', async () => {
+      const f = $('editFront').value.trim();
+      if (!f) { toast2('问题不能为空'); return; }
+      try { await window.vault.srsEdit(c.id, f, $('editBack').value); } catch {}
+      c.front = f; c.back = $('editBack').value.trim();
+      editing = false;
+      toast2('卡面已更新');
+      render();
+    });
+    $('editFront').focus();
+  }
+
+  async function undoLast() {
+    if (!session.length || !lastSnapshot) { toast2('本局还没有评分可撤销'); return; }
+    const snap = lastSnapshot;
+    try { await window.vault.srsRestore(snap); } catch { toast2('撤销失败'); return; }
+    session.pop();
+    idx = Math.max(0, idx - 1);
+    flipped = false;
+    lastSnapshot = null;
+    toast2('已撤销上一评分');
+    swapFresh = true; // 回退也是切卡：给上一张一次轻量滑入
+    render();
+  }
+
+  async function grade(g) {
+    const c = queue[idx];
+    if (!c) return;
+    // 评分前快照：撤销的唯一依据（SM-2 状态不可逆推）
+    lastSnapshot = { id: c.id, due: c.due, interval: c.interval, ease: c.ease, reps: c.reps, lapses: c.lapses, suspended: !!c.suspended };
+    session.push({ grade: g, cardId: c.id });
+    try { await window.vault.srsGrade(c.id, g); } catch {}
+    idx += 1; flipped = false; swapFresh = true;
+    render();
+  }
+
+  async function renderDone() {
+    const good = session.filter(s => s.grade === 3).length;
+    const retention = session.length ? Math.round(good / session.length * 100) : null;
+    let stats = null, guard = null;
+    try { stats = await window.vault.srsStats(); } catch {}
+    try { guard = (typeof window.vault.srsGuard === 'function') ? await window.vault.srsGuard() : null; } catch {}
+    const remainTotal = guard ? guard.total : (stats ? stats.due : 0);
+    const shown = guard ? guard.shown : remainTotal;
+    const nextLine = remainTotal > 0
+      ? `队列里还有 ${remainTotal} 张${guard && guard.total > guard.shown ? `（今天建议做 ${guard.shown} 张）` : '（今天上限已到，明天见）'}`
+      : `下一张将在记忆曲线的下一个节点出现`;
+    const backlogTip = guard && guard.plan
+      ? `<div class="backlog-tip">📚 积压 ${guard.plan.overdue} 张，别硬扛 —— 建议今天做 ${guard.plan.suggestedLimit} 张，约 ${guard.plan.spreadDays} 天消化完。每天清一点，别让记忆债滚雪球。</div>`
+      : '';
+    stage.innerHTML = `<div class="done-panel">
+      <span class="big">🎉</span>
+      <h2>本局完成 · ${session.length} 张</h2>
+      <div class="retention" id="retention">${retention == null ? '—' : '0%'}</div>
+      <p>记住率（"记得"占比）<br>
+      ${stats ? `累计 ${stats.cards} 张卡 · 30 天复习 ${stats.total} 次<br>` : ''}${nextLine}</p>
+      ${backlogTip}
+      <div class="ops-row" style="margin-top:14px">
+        ${remainTotal > 0 ? `<button class="opbtn" id="moreBtn">继续做一批</button>` : ''}
+        <button class="opbtn" id="doneClose">收工</button>
+      </div>
+    </div>`;
+    animateRetention(retention);
+    $('prog').textContent = '已完成';
+    const more = $('moreBtn');
+    if (more) more.addEventListener('click', () => load());
+    $('doneClose').addEventListener('click', () => window.vault.srsClose());
+  }
+
+  // 结算记住率数字滚动：0 → 最终百分比，300ms easeOut；prefers-reduced-motion 直接显示终值
+  function animateRetention(target) {
+    const el = $('retention');
+    if (!el || target == null) return; // 「—」或元素缺失：保持静态
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { el.textContent = target + '%'; return; }
+    const t0 = performance.now(), dur = 300;
+    const tick = (t) => {
+      const p = Math.min(1, (t - t0) / dur);
+      const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
+      el.textContent = Math.round(target * eased) + '%';
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (suspOpen) {
+      if (e.key === 'Escape' || e.key === 'Backspace') { suspOpen = false; render(); }
+      return; // 已暂停面板开着时不响应复习快捷键
+    }
+    if (editing) {
+      if (e.key === 'Escape') { editing = false; render(); }
+      return; // 编辑中不响应复习快捷键（textarea 正常打字）
+    }
+    if (e.key === 'Escape') { if (window.vault.srsClose) window.vault.srsClose(); }
+    if (e.key === ' ') { e.preventDefault(); if (queue.length && idx < queue.length && !flipped) { flipped = true; render(); } }
+    if (['1', '2', '3'].includes(e.key) && flipped) grade(Number(e.key));
+    if (idx < queue.length && queue.length) {
+      const c = queue[idx];
+      const k = e.key.toLowerCase();
+      if (k === 's') op('skip', c);
+      else if (k === 'p') op('suspend', c);
+      else if (k === 'e') op('edit', c);
+      else if (k === 'z') op('undo', c);
+      else if (k === 'o' && c.itemId) op('open', c);
+    }
+    if (e.key === 'Enter' && idx >= queue.length && queue.length) load(); // 结算页回车再来一轮
+  });
+  $('closeBtn').addEventListener('click', () => window.vault.srsClose());
+  // 每次窗口重新显示时重放虚化渐入（热窗 hide/show 不会重新加载页面）
+  if (window.vault.onSrsShown) window.vault.onSrsShown(() => {
+    document.body.classList.remove('win-in'); void document.body.offsetWidth; document.body.classList.add('win-in');
+  });
+  $('suspBtn').addEventListener('click', () => { suspOpen = !suspOpen; render(); });
+
+  load();
+</script>
+</body>
+</html>

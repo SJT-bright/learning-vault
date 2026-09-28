@@ -1,0 +1,294 @@
+/* ============================================================
+ * ui3d.css — 交互层（v3.0 · 扁平化）
+ * 叠加在 styles.css 之上。v3.0 起本文件只剩"克制"两件事：
+ *   1) 可点元素：统一的 ≤150ms 底色 / 边框 / 落影过渡
+ *   2) 点击轻微淡入脉冲（配合 js/ui3d.js 的 .u3d-click 类，
+ *      keyframes 名字必须保留，内容已简化为透明度变化）
+ *
+ * v3.0 移除的内容（对应「安静、扁平、克制」的要求）：
+ *   - 3D 透视舞台（perspective 全部置 none）
+ *   - hover 光泽扫过（::before 渐变扫光 → content:none）
+ *   - 边缘色散折射环（::after mask 环 → content:none）
+ *   - 浮起 / 落下的厚度与位移（transform 一律归零；
+ *     删除类按钮保留 1px 的"下沉"暗示，≤150ms）
+ *   - 卡片鼠标跟随倾斜与光泽扫过（js/ui3d.js 的倾斜写入
+ *     依赖动画结束后 transform 归还，backwards 规则保持不变）
+ *   - 面板 hover "呼吸"提亮（回归与静止一致的单层极轻阴影）
+ * 纯叠加，不改动既有功能类
+ * ============================================================ */
+
+/* ---------- 3D 舞台（已停用：透视全部归零，选择器保留） ---------- */
+#view-nav,
+.side-head,
+.lb-actions,
+.cm-foot,
+.fw-actions,
+.ib-actions,
+.ib-foot {
+  perspective: none;
+}
+#grid {
+  perspective: none;
+  perspective-origin: 50% 0%;
+}
+
+/* ============================================================
+ * 一、可点元素：统一扁平交互
+ * ============================================================ */
+.btn-primary,
+.btn-ghost,
+.btn-danger,
+.btn-small,
+.nav-item,
+.side-add,
+.cat-edit,
+.cat-del,
+.cat-item,
+.card-actions button,
+.lb-nav,
+.lb-close,
+.prompt-toggle,
+.prompt-copy,
+.cm-x,
+.cm-icon {
+  position: relative;
+  overflow: hidden;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease,
+    box-shadow 0.12s ease,
+    transform 0.12s ease;
+}
+
+/* ---------- 1.1 hover 光泽扫过（已停用） ----------
+ * 伪元素不再渲染（content:none），选择器保留占位。 */
+.btn-primary::before,
+.btn-ghost::before,
+.btn-danger::before,
+.btn-small::before,
+.nav-item::before,
+.side-add::before,
+.cat-edit::before,
+.cat-del::before,
+.cat-item::before,
+.card-actions button::before,
+.lb-nav::before,
+.lb-close::before,
+.prompt-toggle::before,
+.prompt-copy::before,
+.cm-x::before,
+.cm-icon::before {
+  content: none;
+}
+.btn-primary:hover::before,
+.btn-ghost:hover::before,
+.btn-danger:hover::before,
+.btn-small:hover::before,
+.nav-item:hover::before,
+.side-add:hover::before,
+.cat-edit:hover::before,
+.cat-del:hover::before,
+.cat-item:hover::before,
+.card-actions button:hover::before,
+.lb-nav:hover::before,
+.lb-close:hover::before,
+.prompt-toggle:hover::before,
+.prompt-copy:hover::before,
+.cm-x:hover::before,
+.cm-icon:hover::before {
+  transform: none;
+}
+
+/* ---------- 1.2 边缘色散折射环（已停用） ----------
+ * @supports 结构与选择器保留，内容改为 content:none。 */
+@supports (mask-composite: exclude) or (-webkit-mask-composite: xor) {
+  .btn-primary::after,
+  .btn-ghost::after,
+  .btn-danger::after,
+  .btn-small::after,
+  .nav-item::after,
+  .side-add::after,
+  .cat-edit::after,
+  .cat-del::after,
+  .cat-item::after,
+  .card-actions button::after,
+  .lb-nav::after,
+  .lb-close::after,
+  .prompt-toggle::after,
+  .prompt-copy::after,
+  .cm-x::after,
+  .cm-icon::after {
+    content: none;
+  }
+}
+
+/* ---------- 1.3 hover：不再浮起 ----------
+ * 只允许底色 / 边框变化（styles.css 负责）与落影略微变实。
+ * ⚠️ .btn-danger / .cat-del 刻意不在这组里（它们要下沉，见 1.5）。 */
+.btn-primary:hover,
+.btn-ghost:hover,
+.btn-small:hover,
+.nav-item:hover,
+.side-add:hover,
+.cat-edit:hover,
+.cat-item:hover,
+.card-actions button:hover,
+.lb-nav:hover,
+.lb-close:hover,
+.prompt-toggle:hover,
+.prompt-copy:hover,
+.cm-x:hover,
+.cm-icon:hover {
+  transform: none;
+  box-shadow: var(--btn-3d-hover);
+}
+/* 激活分类行基准态自带 translateX(3px) 缩进：悬停时保持，
+   否则 active 行一悬停就会跳位（styles.css 末尾的减少动效例外同理） */
+.cat-item.active:hover {
+  transform: translateX(3px);
+}
+
+/* ---------- 1.4 active：按下 ----------
+ * 位移归零，只留一层极轻内阴影作为"按下"暗示。 */
+.btn-primary:active,
+.btn-ghost:active,
+.btn-small:active,
+.nav-item:active,
+.side-add:active,
+.cat-edit:active,
+.cat-item:active,
+.card-actions button:active,
+.lb-nav:active,
+.lb-close:active,
+.prompt-toggle:active,
+.prompt-copy:active,
+.cm-x:active,
+.cm-icon:active {
+  transform: none;
+  box-shadow: var(--btn-3d-active);
+}
+.cat-item.active:active {
+  transform: translateX(3px);
+}
+
+/* ---------- 1.5 破坏性操作：hover 轻微下沉 ----------
+ * 中性配色下保留 1px 的"下沉"作为破坏性暗示（≤150ms 位移）。 */
+.btn-danger:hover,
+.cat-del:hover {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+.btn-danger:active,
+.cat-del:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+/* ============================================================
+ * 二、卡片：倾斜与光泽扫过（已停用）
+ * ============================================================ */
+.card {
+  will-change: auto;
+}
+.card::after {
+  content: none;
+}
+.card:hover::after {
+  transform: none;
+}
+.card:hover {
+  box-shadow: var(--shadow-card);
+}
+.card:active {
+  transform: none;
+}
+
+/* ============================================================
+ * 三、面板：hover 不再做"呼吸"提亮
+ *     保持与静止一致的单层极轻阴影（选择器保留）。
+ * ============================================================ */
+#sidebar:hover,
+#main:hover,
+.lb-info:hover {
+  box-shadow: var(--shadow-float);
+}
+
+/* ============================================================
+ * 四、输入控件：内凹阴影停用，聚焦只留暖橘 focus ring
+ * ============================================================ */
+#search,
+.lb-cat-select,
+#prompt-text,
+.cm-input {
+  box-shadow: none;
+  transition: border-color 0.12s ease, background-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+#search:focus,
+.lb-cat-select:focus,
+#prompt-text:focus,
+.cm-input:focus {
+  box-shadow: var(--focus-ring);
+}
+
+/* ============================================================
+ * 五、点击轻微淡入脉冲（js/ui3d.js 触发 .u3d-click）
+ * ------------------------------------------------------------
+ * ⚠️ 用 backwards，**不要**用 both。
+ *   both/forwards 会在动画结束后继续保留 to 关键帧的
+   transform（计算值是单位矩阵，不是 none），而动画的优先级
+   高于 :hover 与内联样式 —— ui3d.js 的倾斜写入会失效。
+   backwards 在动画结束的瞬间就把样式还回去。 */
+.u3d-click {
+  animation: u3d-click 0.12s ease backwards;
+}
+/* 仅对"按钮类"元素禁用指针事件，防止脉冲期间重复触发；
+   卡片与分类行需要保持 hover 响应，不做禁用。 */
+.u3d-click:not(.card):not(.cat-item):not(.prompt-item) {
+  pointer-events: none;
+}
+@keyframes u3d-click {
+  0%   { opacity: 0.65; }
+  100% { opacity: 1; }
+}
+
+/* ============================================================
+ * 六、降级保护
+ * ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .u3d-click,
+  .card::after,
+  .card:hover::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  /* 光泽扫过已停用（伪元素不再渲染），保留选择器占位 */
+  .btn-primary::before,
+  .btn-ghost::before,
+  .btn-danger::before,
+  .btn-small::before,
+  .nav-item::before,
+  .side-add::before,
+  .cat-edit::before,
+  .cat-del::before,
+  .cat-item::before,
+  .card-actions button::before,
+  .lb-nav::before,
+  .lb-close::before,
+  .prompt-toggle::before,
+  .prompt-copy::before,
+  .cm-x::before,
+  .cm-icon::before {
+    display: none;
+  }
+  /* 破坏性按钮的下沉位移也压掉。
+     必须带 !important：styles.css 里的同名覆盖针对的是
+     :hover 的 transform，而这里还要管到 :active。 */
+  .btn-danger:hover,
+  .btn-danger:active,
+  .cat-del:hover,
+  .cat-del:active {
+    transform: none !important;
+  }
+}

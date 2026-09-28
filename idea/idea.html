@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; font-family: -apple-system, "PingFang SC", sans-serif; color: #efe9dd; overflow: hidden; }
+  body { display: flex; flex-direction: column; background: radial-gradient(1100px 760px at 18% -8%, #241c12 0%, #14100b 55%, #0e0b08 100%); }
+  :root { --amber: #d98e4f; --amber-hi: #f2c48a; --ink-2: #c4b8a4; --ink-3: #8a7e6c; }
+  .titlebar {
+    -webkit-app-region: drag; flex: none; height: 42px; display: flex; align-items: center;
+    padding: 0 12px; font-size: 12.5px; font-weight: 700; color: #e8ddc9; justify-content: space-between;
+    border-bottom: 1px solid rgba(255,255,255,.07); user-select: none;
+  }
+  .titlebar .tb-left { display: flex; align-items: center; gap: 8px; }
+  .titlebar button {
+    -webkit-app-region: no-drag; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06);
+    color: rgba(239,233,221,.65); width: 22px; height: 22px; border-radius: 6px; cursor: pointer; font-size: 11px;
+  }
+  .titlebar button:hover { color: #fff; background: rgba(255,255,255,.12); }
+  .composer { flex: none; padding: 14px 16px 8px; display: flex; flex-direction: column; gap: 8px; }
+  .composer textarea {
+    width: 100%; border: 1px solid rgba(217,142,79,.35); border-radius: 12px; padding: 11px 13px;
+    font-size: 13.5px; font-family: inherit; outline: none; color: #efe9dd; resize: none;
+    background: rgba(255,255,255,.05); line-height: 1.6; min-height: 56px; max-height: 130px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06); transition: border-color .2s, box-shadow .2s;
+  }
+  .composer textarea:focus { border-color: rgba(242,196,138,.75); box-shadow: 0 0 0 3px rgba(217,142,79,.15); }
+  .composer textarea::placeholder { color: var(--ink-3); }
+  .composer .row { display: flex; align-items: center; gap: 10px; }
+  .composer .hint { font-size: 10.5px; color: var(--ink-3); margin-right: auto; }
+  .kindchip { font-size: 11px; padding: 3px 10px; border-radius: 99px; border: 1px solid rgba(217,142,79,.35);
+    background: rgba(217,142,79,.12); color: var(--amber-hi); cursor: pointer; }
+  .addbtn {
+    border: 1px solid rgba(255,233,194,.35); border-bottom-color: rgba(0,0,0,.4); border-radius: 10px;
+    background: linear-gradient(145deg, #e2a06b, #b06f3c 70%); color: #fff7ec; font-weight: 700;
+    font-size: 12.5px; padding: 7px 20px; cursor: pointer; transition: transform .12s, filter .12s;
+  }
+  .addbtn:hover { transform: translateY(-1px); filter: brightness(1.12); }
+  .addbtn:active { transform: translateY(1px); }
+  .list { flex: 1; overflow-y: auto; padding: 6px 16px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .idea {
+    border: 1px solid rgba(255,255,255,.09); border-bottom-color: rgba(0,0,0,.35); border-radius: 12px;
+    background: rgba(255,255,255,.045); padding: 10px 12px 9px;
+    /* backwards 而非 both：入场后交还 transform/opacity，悬停浮起才能生效，
+       也不再永久覆盖 .doneWrap .idea 的 opacity .7 */
+    animation: fxIn .3s cubic-bezier(.22,1,.36,1) backwards;
+    animation-delay: calc(var(--i, 0) * 30ms);
+    transition: transform .15s ease, border-color .15s ease, background-color .15s ease;
+  }
+  /* 悬停轻浮起：边框/背景微亮，保留下缘暗边的层次语言 */
+  .idea:hover {
+    transform: translateY(-1px);
+    border-color: rgba(255,255,255,.18); border-bottom-color: rgba(0,0,0,.35);
+    background: rgba(255,255,255,.08);
+  }
+  @keyframes fxIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  /* 窗口级虚化渐入：每次显示时整窗虚化→聚焦（与主窗/复习窗同款语言） */
+  @keyframes winIn {
+    0%   { opacity: 0; filter: blur(16px) saturate(1.35); transform: perspective(1000px) translateZ(-60px) scale(1.05); }
+    55%  { opacity: 1; }
+    100% { opacity: 1; filter: blur(0) saturate(1); transform: perspective(1000px) translateZ(0) scale(1); }
+  }
+  body.win-in { animation: winIn .3s cubic-bezier(.22,1,.36,1) both; }
+  @media (prefers-reduced-motion: reduce) {
+    body.win-in, .idea { animation: none; }
+    .idea { transition: none; }
+  }
+  .idea .top { display: flex; align-items: flex-start; gap: 10px; }
+  .idea .text { flex: 1; font-size: 13.5px; line-height: 1.7; color: #f3ecdf; white-space: pre-wrap; word-break: break-word; }
+  .idea .age { flex: none; font-size: 10px; font-variant-numeric: tabular-nums; border-radius: 99px; padding: 2px 9px; font-weight: 700; }
+  .age.s0 { color: #a8c8a0; background: rgba(120,180,120,.14); }
+  .age.s1 { color: #f2c48a; background: rgba(217,142,79,.2); }
+  .age.s2 { color: #f0a8a0; background: rgba(200,90,75,.24); }
+  .idea .note { font-size: 11.5px; color: var(--ink-2); margin-top: 4px; line-height: 1.6; }
+  .idea .acts { display: flex; gap: 6px; margin-top: 8px; align-items: center; flex-wrap: wrap; }
+  .iact { border: 1px solid rgba(255,255,255,.13); border-bottom-color: rgba(0,0,0,.35); background: rgba(255,255,255,.05);
+    color: var(--ink-2); font-size: 11px; border-radius: 8px; padding: 4px 11px; cursor: pointer; }
+  .iact:hover { color: #f6ecdb; background: rgba(255,255,255,.1); }
+  .iact.done { color: #cdeeda; border-color: rgba(103,180,142,.4); background: rgba(103,180,142,.14); }
+  .iact.week { color: #f2c48a; border-color: rgba(217,142,79,.45); }
+  .iact.del { margin-left: auto; color: rgba(240,168,160,.75); }
+  .empty { text-align: center; color: var(--ink-2); font-size: 13px; line-height: 2.1; padding: 26px 10px; }
+  .empty .big { font-size: 40px; display: block; margin-bottom: 6px; }
+  .sec { flex: none; padding: 8px 16px 0; font-size: 10.5px; letter-spacing: .18em; color: var(--ink-3); font-weight: 700; display: flex; justify-content: space-between; }
+  .sec .toggle { cursor: pointer; color: var(--ink-2); letter-spacing: 0; font-weight: 400; }
+  .doneWrap { flex: none; max-height: 160px; overflow-y: auto; padding: 6px 16px 4px; display: flex; flex-direction: column; gap: 5px; }
+  .doneWrap .idea { padding: 7px 11px; opacity: .7; }
+  .doneWrap .idea .text { font-size: 12px; }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgba(217,142,79,.25); border-radius: 99px; }
+  .foot { flex: none; padding: 6px 0 9px; text-align: center; font-size: 10.5px; color: var(--ink-3); }
+  kbd { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 10px; font-family: inherit; }
+  .editrow { display: flex; gap: 6px; margin-top: 6px; }
+  .editrow input { flex: 1; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06); color: #efe9dd;
+    border-radius: 8px; padding: 5px 8px; font-size: 12px; outline: none; }
+.edit-field{display:flex;flex-direction:column;gap:6px;margin:10px 0;color:#c4b8a4;font-size:12px}.edit-field input,.edit-field textarea,.edit-field select{width:100%;padding:8px;background:#31291f;color:#efe9dd;border:1px solid #68543e;border-radius:7px;font:inherit}.edit-field textarea{min-height:68px;resize:vertical}.age{white-space:nowrap}button:focus-visible{outline:2px solid #f2c48a;outline-offset:2px}
+  /* 新记点子的轻量回执：✓ 已记下 · 撤销 */
+  .ideadone { flex: none; margin: 0 16px 4px; display: flex; align-items: center; gap: 10px; padding: 6px 12px;
+    border-radius: 10px; border: 1px solid rgba(103,180,142,.35); background: rgba(103,180,142,.12);
+    color: #cdeeda; font-size: 11.5px; }
+  .ideadone button { border-color: rgba(255,233,194,.4); color: #ffe9c2; }
+  .ideadone button:hover { background: rgba(217,142,79,.2); }
+  /* 下一步快捷填写行 */
+  .nextset { display: flex; gap: 6px; margin-top: 6px; }
+  .nextset input { flex: 1; border: 1px solid rgba(217,142,79,.4); background: rgba(255,255,255,.06); color: #efe9dd;
+    border-radius: 8px; padding: 5px 8px; font-size: 12px; outline: none; }
+  .nextset input:focus { border-color: rgba(242,196,138,.7); }
+</style>
+</head>
+<body class="win-in">
+  <div class="titlebar">
+    <span class="tb-left">💡 点子</span>
+    <span id="sum" style="font-size:11px;color:var(--ink-3);font-weight:400"></span>
+    <button id="closeBtn" title="关闭（⌘⇧I 随时呼出）">✕</button>
+  </div>
+  <div class="composer">
+    <textarea id="input" placeholder="想到什么就记下来：产品改进、创作灵感、项目机会、学习问题……&#10;Enter 保存 · Shift+Enter 换行"></textarea>
+    <div class="row">
+      <span class="kindchip" id="kindHint">点子</span>
+      <span class="hint" id="hint">Enter 保存 · Shift+Enter 换行 · 不必先选状态</span>
+      <button class="addbtn" id="addBtn">记下</button>
+    </div>
+  </div>
+  <div class="ideadone" id="ideaDone" style="display:none"><span id="ideaDoneText"></span><button class="iact" id="ideaUndoBtn">撤销</button></div>
+  <div class="sec"><span>点子收件箱</span><select id="filter" class="iact"><option value="open">进行中</option><option value="week">本周想推进</option><option value="done">已落实</option><option value="parked">暂时搁置</option><option value="all">全部点子</option></select></div>
+  <div class="list" id="openList"></div>
+  <div class="foot">先记下，再挑几件值得推进的事。已落实和搁置的点子暂停提醒。</div>
+<script>
+  const $=id=>document.getElementById(id);
+  const esc=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  let all=[],filter='open',draftTimer,busy=false,focusId=null,loading=false,doneTimer=null,lastIdeaId=null;
+  function status(s){$('hint').textContent=s;}
+  async function persist(){clearTimeout(draftTimer);try{const t=$('input').value;if(t)await window.vault.draftSave('idea',{text:t,intent:'idea',kind:'idea'});else await window.vault.draftClear('idea');return true;}catch(e){status('草稿未保存：'+e.message);return false;}}
+  window.flushCaptureDraft=persist;
+  async function load(){if(loading)return;loading=true;try{const r=await window.vault.ideasList();all=[...r.open,...r.done,...r.parked];render();}catch(e){status(e.message);}finally{loading=false;}}
+  function render(){
+    const shown=all.filter(i=>filter==='week'?i.this_week&& !['done','parked'].includes(i.status):filter==='all'?true:filter==='open'?!['done','parked'].includes(i.status):i.status===filter);
+    $('sum').textContent=`进行中 ${all.filter(i=>!['done','parked'].includes(i.status)).length}`;
+    $('openList').innerHTML=shown.map((i,idx)=>`<article class="idea" style="--i:${Math.min(idx,15)}" data-id="${esc(i.id)}"><div class="top"><div class="text">${esc(i.text)}</div><span class="age s0">${esc(i.statusLabel)}</span></div>
+      ${i.this_week?'<div class="note">★ 本周想推进</div>':''}${i.next_action?`<div class="note">下一步：${esc(i.next_action)}</div>`:''}
+      ${i.note?`<div class="note">${esc(i.note)}</div>`:''}${i.result_note?`<div class="note">成果：${esc(i.result_note)}</div>`:''}
+      ${i.remind_at?`<div class="note">提醒：${esc(new Date(i.remind_at).toLocaleString('zh-CN'))}${['done','parked'].includes(i.status)?'（当前状态暂停提醒）':''}</div>`:''}
+      <div class="acts"><button class="iact" data-edit="${esc(i.id)}">整理 / 关联</button><button class="iact" data-next="${esc(i.id)}">${i.next_action?'改下一步':'＋ 下一步'}</button><button class="iact week" data-week="${esc(i.id)}">${i.this_week?'取消本周':'本周推进'}</button><button class="iact" data-history="${esc(i.id)}">历程</button><button class="iact del" data-del="${esc(i.id)}">删除</button></div>
+      <div class="nextset" data-nextset="${esc(i.id)}" style="display:none"><input placeholder="下一步做什么？如：周三天前画完分镜" aria-label="下一步做什么"><button class="iact week" data-nextsave>保存</button><button class="iact" data-nextcancel>取消</button></div>
+      <div class="acts">${[...new Set([i.source_item_id,...i.related_item_ids||[]].filter(Boolean))].map(id=>`<button class="iact" data-source="${esc(id)}" data-idea="${esc(i.id)}">↗ ${esc(i.related_titles?.[id]||'关联资料')}</button>`).join('')}${i.result_url?`<button class="iact" data-url="${esc(i.result_url)}">查看成果</button>`:''}</div></article>`).join('')||'<div class="empty">这里还没有点子。先随手记下，再挑几件值得推进的。</div>';
+    $('openList').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>edit(all.find(i=>i.id===b.dataset.edit)));
+    $('openList').querySelectorAll('[data-next]').forEach(b=>b.onclick=()=>{
+      const row=document.querySelector(`[data-nextset="${CSS.escape(b.dataset.next)}"]`);if(!row)return;
+      const i=all.find(x=>x.id===b.dataset.next);
+      row.style.display=row.style.display==='none'?'flex':'none';
+      const inp=row.querySelector('input');inp.value=i&&i.next_action||'';if(row.style.display!=='none')inp.focus();
+    });
+    $('openList').querySelectorAll('[data-nextsave]').forEach(b=>b.onclick=()=>saveNext(b.closest('[data-nextset]')));
+    $('openList').querySelectorAll('[data-nextcancel]').forEach(b=>b.onclick=()=>{b.closest('[data-nextset]').style.display='none';});
+    $('openList').querySelectorAll('[data-nextset] input').forEach(inp=>inp.onkeydown=e=>{
+      if(e.isComposing||e.keyCode===229)return;
+      if(e.key==='Enter'){e.preventDefault();saveNext(inp.closest('[data-nextset]'));}
+      if(e.key==='Escape'){e.preventDefault();inp.closest('[data-nextset]').style.display='none';}
+    });
+    $('openList').querySelectorAll('[data-week]').forEach(b=>b.onclick=async()=>{const i=all.find(x=>x.id===b.dataset.week);await window.vault.ideasPatch(i.id,{this_week:!i.this_week});await load();});
+    $('openList').querySelectorAll('[data-source]').forEach(b=>b.onclick=async()=>{const i=all.find(x=>x.id===b.dataset.idea);const r=await window.vault.showItem(b.dataset.source,i.source_message_ids);if(!r.ok)status(r.error);});
+    $('openList').querySelectorAll('[data-url]').forEach(b=>b.onclick=()=>window.vault.openExternal(b.dataset.url));
+    $('openList').querySelectorAll('[data-history]').forEach(b=>b.onclick=()=>{const i=all.find(x=>x.id===b.dataset.history);const box=dialog('推进历程');box.querySelector('.body').innerHTML=(i.status_history||[]).map(h=>`<p>${esc(new Date(h.at).toLocaleString('zh-CN'))} · ${esc(({clarify:'待想清楚',try:'准备尝试',done:'已落实',parked:'暂时搁置'})[h.status])}${h.result_note?' · '+esc(h.result_note):''}</p>`).join('')||'尚无记录';});
+    $('openList').querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{await window.vault.ideasRemove(b.dataset.del);await load();status('已删除点子');});
+    if(focusId){const c=[...$('openList').querySelectorAll('.idea')].find(x=>x.dataset.id===focusId);if(c){c.style.borderColor='#f2c48a';c.scrollIntoView({block:'center'});focusId=null;}}
+  }
+  async function saveNext(row){
+    const id=row.dataset.nextset,v=row.querySelector('input').value.trim();
+    if(!v){row.style.display='none';return;}
+    const r=await window.vault.ideasPatch(id,{next_action:v});
+    if(r&&!r.ok){status(r.error||'保存失败');return;}
+    row.style.display='none';status('已记录下一步');await load();
+  }
+  // 轻量回执：✓ 已记下 · 撤销（5 秒自动收起）
+  function showIdeaDone(text,id){
+    lastIdeaId=id;
+    $('ideaDoneText').textContent=text;
+    $('ideaDone').style.display='flex';
+    clearTimeout(doneTimer);doneTimer=setTimeout(()=>{$('ideaDone').style.display='none';},5000);
+  }
+  $('ideaUndoBtn').onclick=async()=>{
+    $('ideaDone').style.display='none';clearTimeout(doneTimer);
+    if(!lastIdeaId)return;
+    try{await window.vault.ideasRemove(lastIdeaId);status('已撤销点子');await load();}
+    catch(e){status('撤销失败：'+e.message);}
+  };
+  function dialog(title){const box=document.createElement('div');box.className='idea-modal';box.style.cssText='position:fixed;inset:0;z-index:20;background:#0009;display:grid;place-items:center;padding:16px';box.innerHTML=`<section style="background:#211b14;border:1px solid #806448;border-radius:14px;width:100%;max-height:90vh;overflow:auto;padding:16px"><h3 style="margin-bottom:12px">${esc(title)}</h3><div class="body"></div><div style="display:flex;gap:10px;margin-top:12px"><button class="iact" data-close>关闭</button></div></section>`;document.body.appendChild(box);box.querySelector('[data-close]').onclick=()=>box.remove();return box;}
+  async function edit(i){
+    const box=dialog('整理点子');const body=box.querySelector('.body');
+    const input=(key,label,value,type='input')=>`<label class="edit-field">${label}${type==='textarea'?`<textarea data-key="${key}">${esc(value)}</textarea>`:`<input data-key="${key}" ${key==='remind_at'?'type="datetime-local"':''} value="${esc(value)}">`}</label>`;
+    const date=i.remind_at?new Date(i.remind_at-new Date(i.remind_at).getTimezoneOffset()*60000).toISOString().slice(0,16):'';
+    body.innerHTML=input('text','点子',i.text,'textarea')+`<label class="edit-field">状态<select data-key="status">${Object.entries({clarify:'待想清楚',try:'准备尝试',done:'已落实',parked:'暂时搁置'}).map(([k,v])=>`<option value="${k}" ${i.status===k?'selected':''}>${v}</option>`).join('')}</select></label>`+input('next_action','下一步做什么（可空）',i.next_action)+input('note','补充说明',i.note,'textarea')+input('result_note','落实结果',i.result_note,'textarea')+input('result_url','成果链接',i.result_url)+input('remind_at','提醒时间（留空则每周集中回顾）',date)+`<label class="edit-field">关联资料<input id="linkSearch" placeholder="搜索标题或内容"></label><div id="linked" class="acts"></div><div id="linkResults" class="acts"></div><div class="note" id="editStatus"></div><button class="addbtn" id="saveIdea">保存整理</button>`;
+    const selected=new Set(i.related_item_ids||[]);if(i.source_item_id)selected.add(i.source_item_id);const titles={...(i.related_titles||{})};
+    const linked=()=>{body.querySelector('#linked').innerHTML=[...selected].map(id=>`<button class="iact" data-unlink="${esc(id)}">${esc(titles[id]||'资料不存在')} ×</button>`).join('');body.querySelectorAll('[data-unlink]').forEach(b=>b.onclick=()=>{selected.delete(b.dataset.unlink);linked();});};linked();
+    let seq=0;
+    const search=async()=>{const n=++seq;const r=await window.vault.list({q:body.querySelector('#linkSearch').value,limit:20});if(n!==seq)return;body.querySelector('#linkResults').innerHTML=r.items.filter(x=>!selected.has(x.id)).map(x=>`<button class="iact" data-link="${esc(x.id)}">＋ ${esc(x.title)}</button>`).join('');body.querySelectorAll('[data-link]').forEach(b=>b.onclick=()=>{const x=r.items.find(x=>x.id===b.dataset.link);selected.add(x.id);titles[x.id]=x.title;linked();search();});};
+    body.querySelector('#linkSearch').oninput=search;search();
+    body.querySelector('#saveIdea').onclick=async()=>{
+      const patch={related_item_ids:[...selected]};body.querySelectorAll('[data-key]').forEach(x=>patch[x.dataset.key]=x.value);
+      patch.remind_at=patch.remind_at?new Date(patch.remind_at).getTime():null;
+      if(patch.result_url&&!/^https?:\/\//i.test(patch.result_url)){body.querySelector('#editStatus').textContent='成果链接请使用 http 或 https 地址';return;}
+      try{const r=await window.vault.ideasPatch(i.id,patch);if(!r.ok)throw new Error(r.error);box.remove();await load();}catch(e){body.querySelector('#editStatus').textContent=e.message;}
+    };
+  }
+  async function add(){if(busy)return;const t=$('input').value.trim();if(!t)return;busy=true;$('addBtn').disabled=true;clearTimeout(draftTimer);try{const r=await window.vault.captureSave({kind:'idea',text:t,intent:'idea',draftSlot:'idea'});if(!r.ok)throw new Error(r.error);$('input').value='';clearTimeout(draftTimer);await window.vault.draftClear('idea');filter='open';$('filter').value=filter;
+    if(r.deduped){status('这个点子已存在');showIdeaDone('这个点子已存在，没有重复记',r.idea&&r.idea.id);}
+    else{status('已记下 · 可以在下一条点子上设「下一步」');showIdeaDone('✓ 已记下 · 稍后在列表里设下一步或本周推进',r.idea&&r.idea.id);}
+    await load();}catch(e){status('保存失败：'+e.message);}finally{busy=false;$('addBtn').disabled=false;}}
+  $('addBtn').onclick=add;$('input').oninput=()=>{clearTimeout(draftTimer);draftTimer=setTimeout(persist,350);};
+  $('filter').onchange=()=>{filter=$('filter').value;render();};
+  $('closeBtn').onclick=async()=>{if(await persist())window.vault.ideasClose();};
+  // 每次窗口重新显示时重放虚化渐入（热窗 hide/show 不重新加载页面）
+  if (window.vault.onIdeaShown) window.vault.onIdeaShown(() => {
+    document.body.classList.remove('win-in'); void document.body.offsetWidth; document.body.classList.add('win-in');
+  });
+  document.addEventListener('keydown',async e=>{if(e.isComposing||e.keyCode===229)return;if(e.key==='Escape'){const m=document.querySelector('.idea-modal');if(m){m.remove();return;}if(await persist())window.vault.ideasClose();}if(e.target===$('input')&&e.key==='Enter'&&!e.shiftKey){e.preventDefault();add();}});
+  window.vault.onIdeasChanged(load);window.vault.onIdeaFocus(async id=>{focusId=id;filter='all';$('filter').value=filter;await load();});
+  (async()=>{const d=await window.vault.draftGet('idea');if(d?.text)$('input').value=d.text;await load();$('input').focus();})();
+</script>
+</body></html>

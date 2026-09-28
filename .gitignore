@@ -1,0 +1,11 @@
+.DS_Store
+node_modules/
+dist/
+.mimosa/
+交付物/
+*.log
+*.tmp
+*.zip
+scripts/out/
+scripts/unzipped/
+scripts/probe.docx

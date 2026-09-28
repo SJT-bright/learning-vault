@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图片收藏夹 · ImageVault</title>
+<meta name="description" content="完全本地运行的图片收藏夹：拖入或粘贴即永久保存，分类管理，可附提示词。">
+<!-- 内联 SVG 图标，避免任何外部请求与 404 -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23161a22'/%3E%3Ccircle cx='11' cy='11.5' r='3' fill='%23fff'/%3E%3Cpath d='M4.5 25.5l6.8-6.6 4.7 4.3 3.7-3.3 7.3 5.6z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/ui3d.css">
+</head>
+<body class="win-in">
+
+<!-- ============ 图标精灵（全部内联，零外部请求） ============ -->
+<svg id="iv-sprite" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
+<defs>
+  <!-- 品牌：带保险库边框的照片标记 -->
+  <symbol id="i-vault" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2.8" y="2.8" width="18.4" height="18.4" rx="5.2"/>
+    <circle cx="9" cy="9.2" r="1.7"/>
+    <path d="M4 17.6 9.3 12.4l3.9 3.5 2.6-2.3 4.2 4"/>
+  </symbol>
+
+  <!-- 图片收藏 -->
+  <symbol id="i-gallery" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2.6" y="4.6" width="18.8" height="14.8" rx="3.4"/>
+    <circle cx="8.6" cy="10" r="1.6"/>
+    <path d="M3.4 17.2 8.9 12l4 3.6 2.7-2.4 4.9 4.4"/>
+  </symbol>
+
+  <!-- 提示词库 -->
+  <symbol id="i-prompts" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6.4 2.9h7.4l5 5v13.2H6.4a2.4 2.4 0 0 1-2.4-2.4V5.3a2.4 2.4 0 0 1 2.4-2.4Z"/>
+    <path d="M13.4 3v5.2h5.3"/>
+    <path d="M8.4 13.2h7M8.4 17h4.6"/>
+  </symbol>
+
+  <!-- 收录篮 -->
+  <symbol id="i-inbox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.2 13.4h4.3l1.5 2.4h6l1.5-2.4h4.3"/>
+    <path d="M5.5 4.4h13l2.3 9v4.4a2.2 2.2 0 0 1-2.2 2.2H5.4a2.2 2.2 0 0 1-2.2-2.2v-4.4Z"/>
+  </symbol>
+
+  <!-- 悬浮小窗 -->
+  <symbol id="i-window" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2.8" y="4.2" width="18.4" height="15.6" rx="3.2"/>
+    <path d="M2.8 9h18.4"/>
+    <path d="M6.1 6.6h.02M8.9 6.6h.02"/>
+    <rect x="12.4" y="12.2" width="6.4" height="5.2" rx="1.4" fill="currentColor" stroke="none" opacity=".55"/>
+  </symbol>
+
+  <!-- 搜索 -->
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="10.8" cy="10.8" r="6.6"/>
+    <path d="M15.6 15.6 20.4 20.4"/>
+  </symbol>
+
+  <!-- 加号 -->
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
+    <path d="M12 5.2v13.6M5.2 12h13.6"/>
+  </symbol>
+
+  <!-- 星标（空心 / 实心） -->
+  <symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3.6l2.63 5.6 5.87.86-4.25 4.36 1 6.14L12 17.66l-5.25 2.9 1-6.14L3.5 10.06l5.87-.86Z"/>
+  </symbol>
+  <symbol id="i-star-fill" viewBox="0 0 24 24">
+    <path d="M12 3.2l2.78 5.92 6.22.9-4.5 4.62 1.06 6.5L12 18.06 6.44 21.14l1.06-6.5-4.5-4.62 6.22-.9Z" fill="currentColor"/>
+  </symbol>
+
+  <!-- 删除 -->
+  <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.4 6.6h15.2"/>
+    <path d="M9.4 6.6V4.9a1.3 1.3 0 0 1 1.3-1.3h2.6a1.3 1.3 0 0 1 1.3 1.3v1.7"/>
+    <path d="M6.6 6.6 7.5 19a1.9 1.9 0 0 0 1.9 1.8h5.2A1.9 1.9 0 0 0 16.5 19l.9-12.4"/>
+    <path d="M10.4 10.4v6.2M13.6 10.4v6.2"/>
+  </symbol>
+
+  <!-- 下载原图 -->
+  <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3.4v11.2"/>
+    <path d="M7.6 10.6 12 15l4.4-4.4"/>
+    <path d="M4.4 17.4v1.6a1.8 1.8 0 0 0 1.8 1.8h11.6a1.8 1.8 0 0 0 1.8-1.8v-1.6"/>
+  </symbol>
+
+  <!-- 关闭 -->
+  <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <path d="M6.4 6.4 17.6 17.6M17.6 6.4 6.4 17.6"/>
+  </symbol>
+
+  <!-- 折叠箭头 -->
+  <symbol id="i-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5.6 9.2 12 15.6l6.4-6.4"/>
+  </symbol>
+  <symbol id="i-chevron-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14.6 4.8 7.4 12l7.2 7.2"/>
+  </symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9.4 4.8 16.6 12l-7.2 7.2"/>
+  </symbol>
+
+  <!-- 复制 -->
+  <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="8.6" y="8.6" width="11.6" height="11.6" rx="2.6"/>
+    <path d="M15.4 5.4V5a2.4 2.4 0 0 0-2.4-2.4H6.2A2.4 2.4 0 0 0 3.8 5v6.8A2.4 2.4 0 0 0 6.2 14h.4"/>
+  </symbol>
+
+  <!-- 文件夹（用 currentColor 取分类色） -->
+  <symbol id="i-folder" viewBox="0 0 24 20">
+    <path d="M2 4.5C2 3.1 3.1 2 4.5 2h4.1c.8 0 1.6.4 2 1.1l1 1.6h7.9C20.9 4.7 22 5.8 22 7.2v7.3c0 1.4-1.1 2.5-2.5 2.5h-15C3.1 17 2 15.9 2 14.5V4.5Z" fill="currentColor"/>
+    <path d="M2 4.5C2 3.1 3.1 2 4.5 2h4.1c.8 0 1.6.4 2 1.1l1 1.6H4.5C3.1 4.7 2 5.8 2 7.2V4.5Z" fill="#cde8ff" opacity=".26"/>
+    <path d="M2 7.5h20v1.4H2z" fill="#000" opacity=".2"/>
+  </symbol>
+
+  <!-- 空状态：文件夹 -->
+  <symbol id="i-folder-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 8.4V5.6A2.2 2.2 0 0 1 5.2 3.4h3.9c.7 0 1.4.4 1.8 1l1.1 1.7h6.8A2.2 2.2 0 0 1 21 8.3v1.1"/>
+    <path d="M2.2 10.4h19.6l-2 8.3a2 2 0 0 1-1.9 1.5H6.1a2 2 0 0 1-1.9-1.5Z"/>
+  </symbol>
+
+  <!-- 空状态：笔记 -->
+  <symbol id="i-note" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5.4 2.8h9.2l4.4 4.4v14H5.4a1.8 1.8 0 0 1-1.8-1.8V4.6a1.8 1.8 0 0 1 1.8-1.8Z"/>
+    <path d="M14.2 2.9v4.5h4.5"/>
+    <path d="M7.6 12.4h6.6M7.6 16.4h8.6"/>
+  </symbol>
+
+  <!-- 空状态：下载托盘（拖放遮罩） -->
+  <symbol id="i-tray-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 2.8v10.4"/>
+    <path d="M7.4 9 12 13.6 16.6 9"/>
+    <path d="M3.4 15.2v2.6a3.4 3.4 0 0 0 3.4 3.4h10.4a3.4 3.4 0 0 0 3.4-3.4v-2.6"/>
+  </symbol>
+
+  <!-- 已保存 -->
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.8 12.6 9.8 17.6 19.2 6.6"/>
+  </symbol>
+
+  <!-- v2.2：外链徽章图标 -->
+  <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10.6 13.4a4.8 4.8 0 0 0 6.8 0l2.4-2.4a4.8 4.8 0 0 0-6.8-6.8L11.6 5.6"/>
+    <path d="M13.4 10.6a4.8 4.8 0 0 0-6.8 0l-2.4 2.4a4.8 4.8 0 0 0 6.8 6.8l1.4-1.4"/>
+  </symbol>
+
+  <!-- ============ 分类图标库（图标选择器用） ============
+       统一 24×24 描边、一律 currentColor —— 因此天然是单色的，
+       分类之间的区别只来自「形状」和「名称」，不来自颜色。
+       列表顺序即选择器里的排列顺序（js/app.js 的 CAT_ICONS 与此一致）。 -->
+  <symbol id="i-cat-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 7.4V6a2 2 0 0 1 2-2h4.1a2 2 0 0 1 1.7.95l.9 1.45H19a2 2 0 0 1 2 2v9.6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>
+  </symbol>
+  <symbol id="i-cat-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3.4l2.72 5.76 6.08.84-4.4 4.4 1.06 6.14L12 17.64l-5.46 2.9 1.06-6.14-4.4-4.4 6.08-.84Z"/>
+  </symbol>
+  <symbol id="i-cat-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 20.3c-1.1-.9-8-5.6-8-10.5A4.6 4.6 0 0 1 12 7.2a4.6 4.6 0 0 1 8 2.6c0 4.9-6.9 9.6-8 10.5Z"/>
+  </symbol>
+  <symbol id="i-cat-bookmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6.6 3.6h10.8a1.4 1.4 0 0 1 1.4 1.4v15.6L12 16.4l-6.8 4.2V5a1.4 1.4 0 0 1 1.4-1.4Z"/>
+  </symbol>
+  <symbol id="i-cat-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11.4 3.6H19a1.4 1.4 0 0 1 1.4 1.4v7.6a1.4 1.4 0 0 1-.41.99l-7.6 7.6a1.4 1.4 0 0 1-1.98 0l-7-7a1.4 1.4 0 0 1 0-1.98l7.6-7.6a1.4 1.4 0 0 1 .99-.41Z"/>
+    <circle cx="15.8" cy="8.2" r="1.4"/>
+  </symbol>
+  <symbol id="i-cat-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3.2" y="4.6" width="17.6" height="14.8" rx="2.8"/>
+    <circle cx="8.6" cy="9.8" r="1.5"/>
+    <path d="M3.8 17.4 9.3 12l3.7 3.4 2.6-2.3 4.6 4.3"/>
+  </symbol>
+  <symbol id="i-cat-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.2 8.8a2 2 0 0 1 2-2h1.9l1.4-2.2h7l1.4 2.2h1.9a2 2 0 0 1 2 2v8.2a2 2 0 0 1-2 2H5.2a2 2 0 0 1-2-2Z"/>
+    <circle cx="12" cy="12.6" r="3.4"/>
+  </symbol>
+  <symbol id="i-cat-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3.4a8.6 8.6 0 0 0 0 17.2c1.3 0 2.1-.9 2.1-1.9 0-1.4-1.2-1.8-1.2-2.9 0-.9.8-1.6 1.7-1.6h1.8a4.4 4.4 0 0 0 4.4-4.4c0-3.6-3.7-6.4-8.8-6.4Z"/>
+    <circle cx="8.4" cy="10.6" r="1.1" fill="currentColor" stroke="none"/>
+    <circle cx="12" cy="7.8" r="1.1" fill="currentColor" stroke="none"/>
+    <circle cx="15.7" cy="10.4" r="1.1" fill="currentColor" stroke="none"/>
+  </symbol>
+  <symbol id="i-cat-brush" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20.4 3.6a2.05 2.05 0 0 0-2.9 0l-6.8 6.8 2.9 2.9 6.8-6.8a2.05 2.05 0 0 0 0-2.9Z"/>
+    <path d="M10.7 10.4 4.5 16.6a3.3 3.3 0 0 0-.94 2.34l-.16 1.9 1.9-.16a3.3 3.3 0 0 0 2.34-.94l6.2-6.2"/>
+  </symbol>
+  <symbol id="i-cat-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.2 19.8h4.1L20 8.1a2.05 2.05 0 0 0-2.9-2.9L5.4 16.9Z"/>
+    <path d="M15.6 6.6 18.4 9.4"/>
+  </symbol>
+  <symbol id="i-cat-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8.8 7.8 4.2 12l4.6 4.2"/>
+    <path d="M15.2 7.8 19.8 12l-4.6 4.2"/>
+    <path d="M13.4 4.6 10.6 19.4"/>
+  </symbol>
+  <symbol id="i-cat-cube" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3.2 20.2 7.8v8.4L12 20.8 3.8 16.2V7.8Z"/>
+    <path d="M3.8 7.8 12 12.4l8.2-4.6M12 12.4v8.4"/>
+  </symbol>
+  <symbol id="i-cat-rocket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3.2c3.3 1.9 5.2 5.2 5.2 9l-2.2 2.6H9l-2.2-2.6c0-3.8 1.9-7.1 5.2-9Z"/>
+    <circle cx="12" cy="9.4" r="1.7"/>
+    <path d="M9 14.8 6.6 17.4M15 14.8l2.4 2.6"/>
+    <path d="M10.4 18.2c0 1.4 1.6 2.6 1.6 2.6s1.6-1.2 1.6-2.6"/>
+  </symbol>
+  <symbol id="i-cat-bulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9.4 16.6a6 6 0 1 1 5.2 0v2.4a1.6 1.6 0 0 1-1.6 1.6h-2a1.6 1.6 0 0 1-1.6-1.6Z"/>
+    <path d="M9.8 16.6h4.4"/>
+  </symbol>
+  <symbol id="i-cat-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.2 4.8A1.6 1.6 0 0 1 5.8 3.2H11v16.4H5.8a1.6 1.6 0 0 0-1.6 1.6Z"/>
+    <path d="M19.8 4.8a1.6 1.6 0 0 0-1.6-1.6H13v16.4h5.2a1.6 1.6 0 0 1 1.6 1.6Z"/>
+  </symbol>
+  <symbol id="i-cat-music" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="7" cy="17.6" r="2.6"/>
+    <circle cx="17.4" cy="15.4" r="2.6"/>
+    <path d="M9.6 17.6V5.4l10.4-2.2v12.2"/>
+  </symbol>
+  <symbol id="i-cat-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3.2" y="4.8" width="17.6" height="14.4" rx="3"/>
+    <path d="M10.4 9.4 15.8 12l-5.4 2.6Z"/>
+  </symbol>
+  <symbol id="i-cat-gamepad" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7.6 8.4h8.8a4.6 4.6 0 0 1 4.6 4.6v1.6a2.6 2.6 0 0 1-4.8 1.4l-.8-1.2H8.6l-.8 1.2A2.6 2.6 0 0 1 3 14.6V13a4.6 4.6 0 0 1 4.6-4.6Z"/>
+    <path d="M7.8 11.2v2.4M6.6 12.4h2.4"/>
+    <circle cx="16.4" cy="11.8" r="1" fill="currentColor" stroke="none"/>
+    <circle cx="18.2" cy="13.6" r="1" fill="currentColor" stroke="none"/>
+  </symbol>
+  <symbol id="i-cat-coffee" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.2 8.6h11.6v6a4 4 0 0 1-4 4H8.2a4 4 0 0 1-4-4Z"/>
+    <path d="M15.8 10.2h1.6a2.5 2.5 0 0 1 0 5h-1.6"/>
+    <path d="M4 21h12"/>
+  </symbol>
+  <symbol id="i-cat-food" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6.4 3.4v6.2a2.4 2.4 0 0 0 4.8 0V3.4"/>
+    <path d="M8.8 9.6v11"/>
+    <path d="M17.6 3.4c-1.6 1.6-2.4 3.6-2.4 5.8 0 1.6.8 2.8 2.4 3.2v8.2"/>
+  </symbol>
+  <symbol id="i-cat-plane" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10.4 3.6a1.6 1.6 0 0 1 3.2 0v4.9l7 3.5v2.4l-7-2.1v4.3l2.6 1.7v1.7L12 19.4l-4.2.6v-1.7l2.6-1.7v-4.3l-7 2.1v-2.4l7-3.5Z"/>
+  </symbol>
+  <symbol id="i-cat-car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.6 16.4v-3.6l1.9-4.3a2 2 0 0 1 1.85-1.2h9.3a2 2 0 0 1 1.85 1.2l1.9 4.3v3.6"/>
+    <path d="M3.6 12.8h16.8"/>
+    <circle cx="7.6" cy="17.4" r="2"/>
+    <circle cx="16.4" cy="17.4" r="2"/>
+  </symbol>
+  <symbol id="i-cat-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.6 10.6 12 3.4l8.4 7.2v9a1.4 1.4 0 0 1-1.4 1.4H5a1.4 1.4 0 0 1-1.4-1.4Z"/>
+    <path d="M9.6 21v-6.8h4.8V21"/>
+  </symbol>
+  <symbol id="i-cat-building" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.8 20.8V5.4a1.6 1.6 0 0 1 1.6-1.6h6a1.6 1.6 0 0 1 1.6 1.6v15.4"/>
+    <path d="M14 20.8V9.8h4.2a1.6 1.6 0 0 1 1.6 1.6v9.4"/>
+    <path d="M3 20.8h18"/>
+    <path d="M8 7.4h1.8M8 10.8h1.8M8 14.2h1.8"/>
+  </symbol>
+  <symbol id="i-cat-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9.2 4.2 3.4 6.4v13.4l5.8-2.2 5.6 2.2 5.8-2.2V4.2l-5.8 2.2Z"/>
+    <path d="M9.2 4.2v13.4M14.8 6.4v13.4"/>
+  </symbol>
+  <symbol id="i-cat-compass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="8.6"/>
+    <path d="M15.6 8.4 13.7 13.7 8.4 15.6l1.9-5.3Z"/>
+  </symbol>
+  <symbol id="i-cat-flag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5.6 3.4v17.2"/>
+    <path d="M5.6 4.8h11.6l-2 3.8 2 3.8H5.6"/>
+  </symbol>
+  <symbol id="i-cat-gift" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3.4" y="9.6" width="17.2" height="4" rx="1.2"/>
+    <path d="M5.2 13.6v6a1.4 1.4 0 0 0 1.4 1.4h10.8a1.4 1.4 0 0 0 1.4-1.4v-6"/>
+    <path d="M12 9.6v11.4"/>
+    <path d="M12 9.6S10.8 3.6 8.4 3.6a2.4 2.4 0 0 0 0 4.8H12Zm0 0s1.2-6 3.6-6a2.4 2.4 0 0 1 0 4.8H12Z"/>
+  </symbol>
+  <symbol id="i-cat-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.4 19.6C3.2 14 7.2 5.4 19.6 4.4c1 8.4-3.6 15.2-12 15.2a6.4 6.4 0 0 1-3.2-1Z"/>
+    <path d="M4.4 19.6C7.2 14.4 11.2 10.8 16 8.4"/>
+  </symbol>
+  <symbol id="i-cat-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="4.2"/>
+    <path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7"/>
+  </symbol>
+  <symbol id="i-cat-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20.4 14.6A8.6 8.6 0 0 1 9.4 3.6a8.6 8.6 0 1 0 11 11Z"/>
+  </symbol>
+  <symbol id="i-cat-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7.2 18.4a4.4 4.4 0 0 1-.4-8.78 5.6 5.6 0 0 1 10.74 1.3 3.9 3.9 0 0 1-.54 7.48Z"/>
+  </symbol>
+  <symbol id="i-cat-fire" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3.2c1.6 2.6 5 4.6 5 8.6a5 5 0 0 1-10 0c0-1.8.8-3.2 2-4.4.3 1.5 1.1 2.4 2.2 2.6-.8-2.2-.6-4.4.8-6.8Z"/>
+  </symbol>
+  <symbol id="i-cat-wave" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2.8 9.2c2-1.6 4-1.6 6 0s4 1.6 6 0 4-1.6 6 0"/>
+    <path d="M2.8 14.4c2-1.6 4-1.6 6 0s4 1.6 6 0 4-1.6 6 0"/>
+    <path d="M2.8 19.6c2-1.6 4-1.6 6 0s4 1.6 6 0 4-1.6 6 0"/>
+  </symbol>
+  <symbol id="i-cat-mountain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2.6 19.4 9 7.6l4 6.6 2.6-4 5.8 9.2Z"/>
+    <circle cx="17.4" cy="6.2" r="2"/>
+  </symbol>
+  <symbol id="i-cat-paw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="6.6" cy="10.6" rx="1.9" ry="2.5"/>
+    <ellipse cx="10.2" cy="7.6" rx="1.9" ry="2.5"/>
+    <ellipse cx="14.4" cy="7.6" rx="1.9" ry="2.5"/>
+    <ellipse cx="18" cy="10.6" rx="1.9" ry="2.5"/>
+    <path d="M12.3 13.4c2.9 0 5.1 2 5.1 3.9 0 1.8-1.5 2.9-3.5 2.9h-3.2c-2 0-3.5-1.1-3.5-2.9 0-1.9 2.2-3.9 5.1-3.9Z"/>
+  </symbol>
+  <symbol id="i-cat-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="8.6"/>
+    <path d="M12 6.8V12l3.4 2"/>
+  </symbol>
+  <symbol id="i-cat-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="5.4" width="18" height="13.2" rx="2.6"/>
+    <path d="M3.8 7 12 13l8.2-6"/>
+  </symbol>
+  <symbol id="i-cat-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20.4 12.4c0 4.2-3.8 7.6-8.4 7.6a9.6 9.6 0 0 1-2.9-.44L4.2 21l1.5-4.1a7.2 7.2 0 0 1-2.1-4.5c0-4.2 3.8-7.6 8.4-7.6s8.4 3.4 8.4 7.6Z"/>
+  </symbol>
+  <symbol id="i-cat-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 20.2h16.4"/>
+    <path d="M7.4 20.2V12M12 20.2V6.4M16.6 20.2v-5.6"/>
+  </symbol>
+  <symbol id="i-cat-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4.4" y="10.4" width="15.2" height="9.8" rx="2.4"/>
+    <path d="M7.8 10.4V7.6a4.2 4.2 0 0 1 8.4 0v2.8"/>
+    <path d="M12 14.4v2.2"/>
+  </symbol>
+  <symbol id="i-cat-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="8" cy="15.6" r="4.2"/>
+    <path d="M11 12.6 19.4 4.2M16.4 7.2l2.2 2.2M14 9.6l2.2 2.2"/>
+  </symbol>
+  <symbol id="i-cat-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="8.6"/>
+    <path d="M3.4 12h17.2"/>
+    <path d="M12 3.4c2.3 2.4 3.5 5.4 3.5 8.6S14.3 18.2 12 20.6c-2.3-2.4-3.5-5.4-3.5-8.6S9.7 5.8 12 3.4Z"/>
+  </symbol>
+  <symbol id="i-cat-diamond" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6.6 3.6h10.8l3.8 5.2L12 20.4 2.8 8.8Z"/>
+    <path d="M2.8 8.8h18.4M9.4 8.8 12 20.4l2.6-11.6M6.6 3.6l2.8 5.2M17.4 3.6l-2.8 5.2"/>
+  </symbol>
+  <symbol id="i-cat-crown" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.4 7.2 7 12.4l5-6.6 5 6.6 3.6-5.2-1.6 11.2H5Z"/>
+    <path d="M5 20.4h14"/>
+  </symbol>
+  <symbol id="i-cat-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6.4 16.8V11a5.6 5.6 0 0 1 11.2 0v5.8l1.4 1.8H5Z"/>
+    <path d="M10.2 21a2 2 0 0 0 3.6 0"/>
+  </symbol>
+  <symbol id="i-cat-sparkle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11 3.4 12.8 9 18.4 10.8 12.8 12.6 11 18.2 9.2 12.6 3.6 10.8 9.2 9Z"/>
+    <path d="M17.8 15.6l.8 2.3 2.3.8-2.3.8-.8 2.3-.8-2.3-2.3-.8 2.3-.8Z"/>
+  </symbol>
+  <symbol id="i-cat-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3.2 20 6.2v6c0 4.4-3.3 7.6-8 8.6-4.7-1-8-4.2-8-8.6v-6Z"/>
+    <path d="M9 12.2 11.3 14.5 15.2 10.4"/>
+  </symbol>
+</defs>
+</svg>
+
+<div id="app">
+  <aside id="sidebar">
+    <div class="brand">
+      <span class="brand-icon" aria-hidden="true"><svg class="ic ic-brand"><use href="#i-vault"/></svg></span>
+      <span class="brand-name">图片收藏夹</span>
+    </div>
+    <nav id="view-nav">
+      <button class="nav-item active" data-view="gallery" title="图片收藏">
+        <svg class="ic" aria-hidden="true"><use href="#i-gallery"/></svg><span class="nav-label">图片收藏</span>
+      </button>
+      <button class="nav-item" data-view="prompts" title="提示词库">
+        <svg class="ic" aria-hidden="true"><use href="#i-prompts"/></svg><span class="nav-label">提示词库</span>
+      </button>
+    </nav>
+    <div class="side-section">
+      <div class="side-head">
+        <span class="side-title">分类</span>
+        <button id="btn-add-category" class="side-add" title="新建分类">
+          <svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>
+        </button>
+      </div>
+      <ul id="cat-list">
+        <li class="cat-item active" data-cat="" data-builtin="true">
+          <span class="cat-dot"><svg class="ic" aria-hidden="true"><use href="#i-gallery"/></svg></span>
+          <span class="cat-name">全部图片</span><span class="cat-count" id="count-all">0</span><button class="cat-edit" title="更换图标"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-cat-pencil"/></svg></button>
+        </li>
+        <li class="cat-item" data-cat="__uncat" data-builtin="true">
+          <span class="cat-dot"><svg class="ic" aria-hidden="true"><use href="#i-inbox"/></svg></span>
+          <span class="cat-name">待收录</span><span class="cat-count" id="count-uncat">0</span><button class="cat-edit" title="更换图标"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-cat-pencil"/></svg></button>
+        </li>
+        <li class="cat-item" data-cat="__fav" data-builtin="true">
+          <span class="cat-dot"><svg class="ic" aria-hidden="true"><use href="#i-star-fill"/></svg></span>
+          <span class="cat-name">星标收藏</span><span class="cat-count" id="count-fav">0</span><button class="cat-edit" title="更换图标"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-cat-pencil"/></svg></button>
+        </li>
+        <li class="cat-item" data-cat="__trash" data-builtin="true">
+          <span class="cat-dot"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></span>
+          <span class="cat-name">回收站</span><span class="cat-count" id="count-trash">0</span><button class="cat-edit" title="更换图标"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-cat-pencil"/></svg></button>
+        </li>
+      </ul>
+    </div>
+    <div class="side-footer">
+      <div class="backup-row">
+        <button id="btn-backup-export" class="stats-action" title="把全部图片和提示词打包成 JSON 文件保存到本地">导出备份</button>
+        <button id="btn-backup-import" class="stats-action" title="从备份 JSON 文件恢复图片">导入备份</button>
+      </div>
+      <input type="file" id="file-import" accept=".json,application/json" hidden>
+      <div id="stats" class="stats">共 0 张 · 0 KB</div>
+      <button id="btn-refetch-all" class="stats-action" hidden title="尝试把所有外链图片抓取到本地">补抓外链</button>
+    </div>
+  </aside>
+
+  <main id="main">
+    <header id="topbar">
+      <div class="search-wrap">
+        <svg class="ic ic-search" aria-hidden="true"><use href="#i-search"/></svg>
+        <input id="search" type="search" placeholder="搜索名称或提示词…" aria-label="搜索名称或提示词">
+      </div>
+      <select id="sort-select" class="topbar-select" aria-label="排序方式">
+        <option value="new">最新优先</option>
+        <option value="old">最早优先</option>
+        <option value="name">名称 A-Z</option>
+      </select>
+      <button id="btn-import" class="btn-primary">
+        <svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg><span>收藏图片</span>
+      </button>
+      <input id="file-input" type="file" accept="image/*" multiple hidden>
+    </header>
+
+    <section id="view-gallery" class="view active">
+      <div id="grid" class="grid"></div>
+      <div id="empty-state" class="empty-state" hidden>
+        <div class="empty-icon" aria-hidden="true"><svg class="ic ic-xl"><use href="#i-folder-open"/></svg></div>
+        <div class="empty-title">收藏夹还是空的</div>
+        <div class="empty-desc">把图片拖进这个窗口，或按 Ctrl+V 粘贴截图，<br>点右上角「收藏图片」也可以。图片会永久保存在本地浏览器里。</div>
+      </div>
+    </section>
+
+    <section id="view-prompts" class="view">
+      <div id="prompt-list" class="prompt-list"></div>
+      <div id="prompt-empty" class="empty-state" hidden>
+        <div class="empty-icon" aria-hidden="true"><svg class="ic ic-xl"><use href="#i-note"/></svg></div>
+        <div class="empty-title">还没有收藏任何提示词</div>
+        <div class="empty-desc">打开任意图片的详情，展开「提示词」抽屉写入提示词，<br>保存后它就会出现在这里。</div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- 拖放遮罩 -->
+<div id="drop-overlay" hidden>
+  <div class="drop-inner">
+    <div class="drop-icon" aria-hidden="true"><svg class="ic ic-xl"><use href="#i-tray-down"/></svg></div>
+    <div class="drop-title">松手收藏</div>
+    <div class="drop-desc">支持多张图片 · 拖进来就变成你的永久资产</div>
+  </div>
+</div>
+
+<!-- 灯箱详情 -->
+<div id="lightbox" hidden>
+  <div class="lb-backdrop"></div>
+  <div class="lb-body">
+    <div class="lb-stage">
+      <button id="lb-prev" class="lb-nav" title="上一张" aria-label="上一张">
+        <svg class="ic" aria-hidden="true"><use href="#i-chevron-left"/></svg>
+      </button>
+      <img id="lb-img" src="" alt="预览">
+      <button id="lb-next" class="lb-nav" title="下一张" aria-label="下一张">
+        <svg class="ic" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+      </button>
+    </div>
+    <aside class="lb-info">
+      <div class="lb-info-head">
+        <input id="lb-name" class="lb-name" type="text" value="" aria-label="图片名称">
+        <button id="lb-close" class="lb-close" title="关闭" aria-label="关闭">
+          <svg class="ic" aria-hidden="true"><use href="#i-close"/></svg>
+        </button>
+      </div>
+      <div id="lb-meta" class="lb-meta">—</div>
+      <div class="lb-row">
+        <label class="lb-label" for="lb-cat-select">分类</label>
+        <select id="lb-cat-select"></select>
+      </div>
+      <div class="lb-actions">
+        <button id="lb-fav" class="btn-ghost" title="星标">
+          <svg class="ic" aria-hidden="true"><use id="lb-fav-use" href="#i-star"/></svg><span id="lb-fav-text">星标</span>
+        </button>
+        <button id="lb-download" class="btn-ghost" title="下载原图">
+          <svg class="ic" aria-hidden="true"><use href="#i-download"/></svg><span>下载原图</span>
+        </button>
+        <button id="lb-refetch" class="btn-ghost" title="尝试抓取原图存到本地" hidden>
+          <svg class="ic" aria-hidden="true"><use href="#i-tray-down"/></svg><span>补抓原图</span>
+        </button>
+        <button id="lb-delete" class="btn-danger" title="删除">
+          <svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg><span>删除</span>
+        </button>
+      </div>
+      <div id="prompt-drawer" class="prompt-drawer">
+        <button id="prompt-toggle" class="prompt-toggle">
+          <span class="prompt-toggle-label">提示词</span>
+          <span id="prompt-save-state" class="prompt-save-state"></span>
+          <span class="prompt-chev" aria-hidden="true"><svg class="ic ic-sm"><use href="#i-chevron-down"/></svg></span>
+        </button>
+        <div class="prompt-drawer-body">
+          <textarea id="prompt-text" placeholder="写下生成这张图的提示词…（自动保存）" aria-label="提示词"></textarea>
+          <div class="prompt-drawer-foot">
+            <span class="prompt-hint">会保存在这张图片上，并同步到提示词库</span>
+            <button id="btn-copy-prompt" class="btn-ghost btn-small">
+              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-copy"/></svg><span>复制</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div id="toast-zone"></div>
+
+<!-- ============ 分类弹窗：名称 + 图标选择 ============ -->
+<div id="cat-modal" hidden>
+  <div class="cm-backdrop" data-cm-close="1"></div>
+  <div class="cm-panel" role="dialog" aria-modal="true" aria-labelledby="cm-title">
+    <div class="cm-head">
+      <span class="cm-title" id="cm-title">新建分类</span>
+      <button id="cm-close" class="cm-x" type="button" title="关闭" aria-label="关闭">
+        <svg class="ic ic-sm" aria-hidden="true"><use href="#i-close"/></svg>
+      </button>
+    </div>
+    <label class="cm-label" for="cm-name">名称</label>
+    <input id="cm-name" class="cm-input" type="text" maxlength="24" autocomplete="off"
+           placeholder="例如：灵感参考" aria-label="分类名称">
+    <div class="cm-label cm-label-row">
+      <span>图标</span>
+      <span id="cm-icon-preview" class="cm-icon-preview" aria-hidden="true"></span>
+    </div>
+    <div id="cm-icons" class="cm-icons" role="radiogroup" aria-label="选择图标"></div>
+    <div class="cm-img-row">
+      <button id="cm-img-set" class="btn-ghost" type="button" title="用一张本地图片作为这个分类的图标">用图片当图标</button>
+      <button id="cm-img-clear" class="btn-ghost" type="button" hidden title="清除图片图标，恢复线条图标">恢复线条图标</button>
+    </div>
+    <input type="file" id="cm-img-file" accept="image/*" hidden>
+    <div class="cm-foot">
+      <button id="cm-cancel" class="btn-ghost" type="button">取消</button>
+      <button id="cm-ok" class="btn-primary" type="button"><span id="cm-ok-text">创建</span></button>
+    </div>
+  </div>
+</div>
+
+<script src="js/icons.js"></script>
+<script src="js/db.js"></script>
+<script src="js/importer.js"></script>
+<script src="js/quickdrop.js"></script>
+<script src="js/app.js"></script>
+<script src="js/motion.js"></script>
+<script>
+  // 每次窗口重新显示时重放整窗虚化渐入（与主进程 iv:shown 联动）
+  try {
+    if (window.vault && window.vault.onIvShown) window.vault.onIvShown(() => {
+      document.body.classList.remove('win-in'); void document.body.offsetWidth; document.body.classList.add('win-in');
+    });
+  } catch {}
+</script>
+<script src="js/floatwin.js"></script>
+<!-- inbox.js 悬浮收录篮已在主画廊窗口移除（2026-09-28，用户确认其为误现浮层）：
+     拖图入窗走通用导入，进侧栏「待收录」分类整理；迷你收录窗（#inbox）不受影响 -->
+<script src="js/cat3d.js"></script>
+<script src="js/ui3d.js"></script>
+<script src="js/desktop.js"></script>
+</body>
+</html>

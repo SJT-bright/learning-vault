@@ -1,0 +1,29 @@
+{
+  "name": "learning-vault",
+  "productName": "学习资产库",
+  "version": "0.10.1",
+  "description": "个人学习资产库：随手记下 / 聊天追加 / 提取复用 / 使用改进 / 点子行动 / 成果复盘",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "smoke": "electron . --smoke",
+    "icons": "node scripts/gen-icons.js",
+    "app": "bash scripts/make-app.sh",
+    "selfcheck": "node scripts/selfcheck.js",
+    "drop-test": "LV_CONFIG_DIR=$(mktemp -d) electron . --drop-test",
+    "flow-verify": "node scripts/ui-workflow.js",
+    "flow-scenario": "node scripts/flow-scenario.js",
+    "workflow-check": "node scripts/workflow-check.js",
+    "capture-check": "node scripts/capture-check.js",
+    "ai-check": "node scripts/ai-check.js",
+    "integration-check": "node scripts/integration-check.js",
+    "overlay-check": "node scripts/overlay-check.js"
+  },
+  "dependencies": {
+    "electron": "^33.2.0",
+    "mammoth": "^1.8.0",
+    "marked": "^14.1.0",
+    "pdf-parse": "^1.1.1"
+  }
+}

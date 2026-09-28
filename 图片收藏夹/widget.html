@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>图片收录钮</title>
+<style>
+  /* 便携收录钮：56×56 原生磨砂玻璃窗口（vibrancy 材质，非透明窗）。
+     页面只画一枚居中的暖橘图标；整窗都是可点击区域。
+     拖图靠近（或点一下）→ 主进程把窗口展开成玻璃收录篮。 */
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+  body { height: 100vh; display: flex; align-items: center; justify-content: center;
+         user-select: none; -webkit-user-select: none; }
+  #dot {
+    width: 42px; height: 42px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid rgba(61, 51, 42, .22);
+    color: #f97316; cursor: pointer;
+    transition: transform .15s ease, border-color .15s ease;
+  }
+  @media (prefers-color-scheme: dark) {
+    #dot { border-color: rgba(255, 244, 235, .28); }
+  }
+  #dot:hover { border-color: #f97316; }
+  #dot.hot { transform: scale(1.15); border-color: #f97316; }
+  #dot svg { width: 24px; height: 24px; display: block; pointer-events: none; }
+</style>
+</head>
+<body>
+  <div id="dot" title="图片收藏夹：点开，或直接把图片拖进来">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="4"/>
+      <circle cx="9" cy="9.5" r="1.8"/>
+      <path d="M4.5 19l5.5-5.5 4 3.5 3-2.5 4.5 4"/>
+    </svg>
+  </div>
+  <script>
+    (function () {
+      'use strict';
+      var dot = document.getElementById('dot');
+      var armed = 0; // 一次拖拽手势只触发一次展开（dragenter 会连发）
+      function expand() {
+        try { window.vault && window.vault.ivWidgetExpand && window.vault.ivWidgetExpand(); } catch (_) {}
+      }
+      dot.addEventListener('click', expand);
+      document.addEventListener('dragover', function (e) { e.preventDefault(); });
+      document.addEventListener('dragenter', function (e) {
+        e.preventDefault();
+        try {
+          var hasFiles = e.dataTransfer && Array.prototype.includes.call(e.dataTransfer.types || [], 'Files');
+          if (!hasFiles) return;
+          dot.classList.add('hot');
+          var now = Date.now();
+          if (now - armed > 1500) { armed = now; expand(); }
+        } catch (_) {}
+      });
+      document.addEventListener('dragleave', function () { dot.classList.remove('hot'); });
+      document.addEventListener('drop', function (e) {
+        e.preventDefault();
+        dot.classList.remove('hot');
+        expand(); // 圆钮太小接不稳落点：落下一律展开成大收录篮，再拖一次即可入篮
+      });
+    })();
+  </script>
+</body>
+</html>
